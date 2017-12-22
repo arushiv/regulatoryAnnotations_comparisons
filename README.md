@@ -1,7 +1,7 @@
 # Regulatory Annotations Comparisons
 This repository contains code to reproduce results of the manuscript:
 
-Each directory contains code for analyses specific to different figures of the paper. These directories follow this general pattern:
+Each directory contains code for analyses specific to different figures of the paper. Everything is run using `snakemake`. These directories follow this general pattern:
 ```	
 ├── .gitignore
 ├── README.md
@@ -17,6 +17,7 @@ Each directory contains code for analyses specific to different figures of the p
 
 # Preliminaries
 
+- Install [Anaconda](https://conda.io/docs/user-guide/install/index.html)
 - Install [snakemake](http://snakemake.readthedocs.io/en/latest/getting_started/installation.html) (This code used version 4.2.0)
 
 
