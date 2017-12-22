@@ -1,7 +1,7 @@
 # Regulatory Annotations Comparisons
 This repository contains code to reproduce results of the manuscript:
 
-Each directory contains code and dependency specifications for analyses specific to different figures of the paper. These directories follow this general pattern:
+Each directory contains code for analyses specific to different figures of the paper. These directories follow this general pattern:
 ```	
 ├── .gitignore
 ├── README.md
@@ -17,7 +17,7 @@ Each directory contains code and dependency specifications for analyses specific
 
 # Preliminaries
 
-- Install [snakemake](https://bitbucket.org/johanneskoester/snakemake) (This code used version 4.2.0)
+- Install [snakemake](http://snakemake.readthedocs.io/en/latest/getting_started/installation.html) (This code used version 4.2.0)
 
 
 	 
