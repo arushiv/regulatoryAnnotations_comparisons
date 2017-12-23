@@ -1,7 +1,7 @@
 import os
 
 DATA = {
-    'annotationFiles' : '/lab/work/arushiv/chromatin/regulatory_regions_review/files'
+    'annotationFiles' : '../data/annotationFiles'
 }
 
 DIRECTORIES = {
@@ -27,10 +27,12 @@ rule getNumberOfSegments:
     input:
         expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat")
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat"),
+        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat.temp"))
     shell:
         r"""
-        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | sortBed -i - | mergeBed -i - | wc -l | awk '{{print "'"$b"'""\t"$NF}}' OFS='\t' ; done > {output}
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | sortBed -i - | mergeBed -i - | wc -l | awk '{{print "'"$b"'""\t"$NF}}' OFS='\t' ; done > {output.tempfile} ;
+        echo -e "cell\tannotation\tnumber" | cat - {output.tempfile} > {output.main}
         """
 
 rule getLengthDistributionOfSegments:
@@ -38,10 +40,12 @@ rule getLengthDistributionOfSegments:
     input:
         expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat")
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat"),
+        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat.temp")),
     shell:
         r"""
-        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{print $3-$2}}' | awk '{{print "'"$b"'""\t"$0}}' OFS='\t'; done > {output}
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{print $3-$2}}' | awk '{{print "'"$b"'""\t"$0}}' OFS='\t'; done > {output.tempfile} ;
+        echo -e "cell\tannotation\tlength" | cat - {output.tempfile} > {output.main}
         """
 
 rule getGenomeCoverage:
@@ -49,20 +53,22 @@ rule getGenomeCoverage:
     input:
         expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat")
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat"),
+        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat.temp"))
     params:
-        fullGenome = 3095677412 
+        genomeSize = 3095677412 
     shell:
         r"""
-        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{sum+=$3-$2}} END {{print "'"$b"'""\t"sum}}' OFS='\t'; done > {output} 
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{sum+=$3-$2}} END {{print "{params.genomeSize}\t""'"$b"'""\t"sum}}' OFS='\t'; done > {output.tempfile} ;
+        echo -e "length_genome\tcell\tannotation\tlength_annotation" | cat - {output.tempfile} > {output.main}
         """
         
 rule plot:
     """ Plot """
     input:
-        numberOfSegments = rules.getNumberOfSegments.output,
-        lengthDistributionOfSegments = rules.getLengthDistributionOfSegments.output,
-        genomeCoverage = rules.getGenomeCoverage.output
+        numberOfSegments = rules.getNumberOfSegments.output.main,
+        lengthDistributionOfSegments = rules.getLengthDistributionOfSegments.output.main,
+        genomeCoverage = rules.getGenomeCoverage.output.main
     output:
         os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf")
     params:
