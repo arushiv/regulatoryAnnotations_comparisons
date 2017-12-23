@@ -11,7 +11,8 @@ DIRECTORIES = {
 }    
 
 SCRIPTS = {
-    'plot' : "scripts/plot.R"
+    'plot_summaryStats' : "scripts/plot.R",
+    'plot_heatmap' : "scripts/heatmap.R"
 }
 
 REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
@@ -20,7 +21,9 @@ CELLS = ['GM12878','H1','HepG2','K562']
 rule final:
     """ Plot summary statistics for annotations """
     input:
-        os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf"),
+        os.path.join(DIRECTORIES['figures'], "fig.overlapHeatmap.pdf")
+
 
 rule getNumberOfSegments:
     """ Get number of segments for each annotation of each cell type """
@@ -63,8 +66,8 @@ rule getGenomeCoverage:
         echo -e "length_genome\tcell\tannotation\tlength_annotation" | cat - {output.tempfile} > {output.main}
         """
         
-rule plot:
-    """ Plot """
+rule plot_summaryStats:
+    """ Plot summary statistics"""
     input:
         numberOfSegments = rules.getNumberOfSegments.output.main,
         lengthDistributionOfSegments = rules.getLengthDistributionOfSegments.output.main,
@@ -72,8 +75,30 @@ rule plot:
     output:
         os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf")
     params:
-        script = SCRIPTS['plot']
+        script = SCRIPTS['plot_summaryStats']
     shell:
         r"""
         Rscript {params.script} {input.numberOfSegments} {input.lengthDistributionOfSegments} {input.genomeCoverage} {output} 
         """
+
+rule getOverlapFractions:
+    """Get overlap fraction between annotations """
+    input:
+        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "overlapFraction.dat"),
+        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "overlapFraction.dat.temp")) 
+    shell:
+        r"""
+        for i in {input}; do f1=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; len_f1=`less $i | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; for j in `ls {input} | grep -v "$i"`; do f2=`basename $j .annotations.bed | sed -e 's:\.:\t:g'`; len_f2=`less $j | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; overlap=`intersectBed -a $i -b $j | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'` ; echo -e "$f1\t${{len_f1}}\t$f2\t${{len_f2}}\t$overlap" ; done; done > {output.tempfile} ;
+        echo -e "cell1\tfeature1\tlenght1\tcell2\tfeature2\tlength2\toverlap" | cat - {output.tempfile} > {output.main}
+        """
+
+rule plot_overlapFractions:
+    """Plot overlap fraction heatmap """
+    input:
+        rules.getOverlapFractions.output.main
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.overlapHeatmap.pdf")
+    script:
+        SCRIPTS['plot_heatmap']
