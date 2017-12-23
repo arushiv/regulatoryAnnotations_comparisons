@@ -5,7 +5,6 @@ DATA = {
 }
 
 DIRECTORIES = {
-    'data' : "data",
     'intermediateFiles' : "intermediateFiles",
     'figures' : "figures"  
 }    
