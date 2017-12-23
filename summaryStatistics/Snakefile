@@ -1,8 +1,6 @@
 import os
 
-DATA = {
-    'annotationFiles' : '../data/annotationFiles'
-}
+include: "../Snakefile_config"
 
 DIRECTORIES = {
     'intermediateFiles' : "intermediateFiles",
@@ -17,6 +15,8 @@ SCRIPTS = {
 REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
 CELLS = ['GM12878','H1','HepG2','K562']
 
+print(expand(DATA['annotations'], cell = CELLS, region = REGIONS))
+
 rule final:
     """ Plot summary statistics for annotations """
     input:
@@ -27,7 +27,7 @@ rule final:
 rule getNumberOfSegments:
     """ Get number of segments for each annotation of each cell type """
     input:
-        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+        expand(DATA['annotations'], cell = CELLS, region = REGIONS)
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat"),
         tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat.temp"))
@@ -40,7 +40,7 @@ rule getNumberOfSegments:
 rule getLengthDistributionOfSegments:
     """ Get length of segments for each annotation of each cell type """
     input:
-        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+        expand(DATA['annotations'], cell = CELLS, region = REGIONS)
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat"),
         tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat.temp")),
@@ -53,7 +53,7 @@ rule getLengthDistributionOfSegments:
 rule getGenomeCoverage:
     """ Get % genome coverage of segments for each annotation of each cell type """
     input:
-        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+        expand(DATA['annotations'], cell = CELLS, region = REGIONS)
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat"),
         tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat.temp"))
@@ -83,7 +83,7 @@ rule plot_summaryStats:
 rule getOverlapFractions:
     """Get overlap fraction between annotations """
     input:
-        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+        expand(DATA['annotations'], cell = CELLS, region = REGIONS)
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "overlapFraction.dat"),
         tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "overlapFraction.dat.temp")) 
