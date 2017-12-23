@@ -1,0 +1,57 @@
+import os
+import pandas
+import subprocess as sp
+
+REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
+CELLS = ['GM12878','H1','HepG2','K562']
+CHROMATINSTATE = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
+
+DATA = {
+    'annotations' : "/lab/work/arushiv/chromatin/regulatory_regions_review/files/{cell}.{region}.annotations.bed",
+    'chromatinStates' : "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/{cell}.{chromatinState}.bed"
+}
+
+DIRECTORIES = {
+    'data' : "data",
+    'intermediateFiles' : "intermediateFiles",
+    'scripts' : "scripts",
+    'figures' : "figures",
+    'logs' : "logs"
+}    
+
+SCRIPTS = {
+    'plot' : "scripts/plot.R",
+}
+
+rule final:
+    """
+    Workflow to compute fraction of chromatin state overlap for each annotation defined in each cell type
+    """
+    input:
+        os.path.join(DIRECTORIES['figures'], "fig.chromatinStateFraction.pdf"),
+
+rule getOverlapFraction:
+    """
+    Calculate overlap fraction with chromatin states 
+    """
+    input:
+        chromatinState = expand(DATA['chromatinStates'], cell = CELLS, chromatinState = CHROMATINSTATE),
+        annotations = expand(DATA['annotations'], cell = CELLS, region = REGIONS)
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "annotations_chromatinStateOverlap.dat"),
+        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "annotations_chromatinStateOverlap.dat.temp"))
+
+    shell:
+        r"""
+        for f1 in {input.annotations}; do nf1=`basename $f1 .annotations.bed | sed -e 's:\.:\t:g'`; len_f1=`less $f1 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; for f2 in {input.chromatinState}; do nf2=`basename $f2 .bed | sed -e 's:\.:\t:g'`; len_intersect=`intersectBed -a $f1 -b $f2 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; echo -e "$nf1\t$nf2\t$len_f1\t$len_intersect" ; done; done > {output.tempout};
+        echo -e "cell1\tannotation\tcell2\tchromatinState\tannotation_length\tstateOverlapLength" | cat - {output.tempout} > {output.main}
+        """
+
+rule plot:
+    input:
+        rules.getOverlapFraction.output.main
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.chromatinStateFraction.pdf"),
+    script:
+        SCRIPTS['plot']
+
