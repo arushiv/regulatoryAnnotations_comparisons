@@ -2,20 +2,10 @@ import os
 
 include: "../Snakefile_config"
 
-DIRECTORIES = {
-    'intermediateFiles' : "intermediateFiles",
-    'figures' : "figures"  
-}    
-
 SCRIPTS = {
     'plot_summaryStats' : "scripts/plot.R",
     'plot_heatmap' : "scripts/heatmap.R"
 }
-
-REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
-CELLS = ['GM12878','H1','HepG2','K562']
-
-print(expand(DATA['annotations'], cell = CELLS, region = REGIONS))
 
 rule final:
     """ Plot summary statistics for annotations """
