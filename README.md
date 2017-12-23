@@ -28,7 +28,7 @@ The analyses use the following software:
 
 To setup these pre-requisites, use the Anaconda/Miniconda Python3 distribution. The Conda package manager is used to obtain and deploy the defined software packages in the specified versions. These instructions are for the Linux platform
 	
-# Step 1: Install [Anaconda](https://conda.io/docs/user-guide/install/index.html)
+# Step 1: Install [Anaconda3](https://conda.io/docs/user-guide/install/index.html)
 Assuming that you have a 64-bit system, on Linux, download and install Anaconda 3
 ```
 $ wget https://repo.continuum.io/archive/Anaconda3-5.0.1-Linux-x86_64.sh
