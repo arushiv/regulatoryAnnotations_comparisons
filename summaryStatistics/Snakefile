@@ -1,0 +1,73 @@
+import os
+
+DATA = {
+    'annotationFiles' : '/lab/work/arushiv/chromatin/regulatory_regions_review/files'
+}
+
+DIRECTORIES = {
+    'data' : "data",
+    'intermediateFiles' : "intermediateFiles",
+    'figures' : "figures"  
+}    
+
+SCRIPTS = {
+    'plot' : "scripts/plot.R"
+}
+
+REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
+CELLS = ['GM12878','H1','HepG2','K562']
+
+rule final:
+    """ Plot summary statistics for annotations """
+    input:
+        os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf")
+
+rule getNumberOfSegments:
+    """ Get number of segments for each annotation of each cell type """
+    input:
+        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "numberOfSegments.dat")
+    shell:
+        r"""
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | sortBed -i - | mergeBed -i - | wc -l | awk '{{print "'"$b"'""\t"$NF}}' OFS='\t' ; done > {output}
+        """
+
+rule getLengthDistributionOfSegments:
+    """ Get length of segments for each annotation of each cell type """
+    input:
+        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "lengthDistributionOfSegments.dat")
+    shell:
+        r"""
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{print $3-$2}}' | awk '{{print "'"$b"'""\t"$0}}' OFS='\t'; done > {output}
+        """
+
+rule getGenomeCoverage:
+    """ Get % genome coverage of segments for each annotation of each cell type """
+    input:
+        expand(os.path.join(DATA['annotationFiles'], '{cell}.{region}.annotations.bed'), cell = CELLS, region = REGIONS)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "genomeCoverage.dat")
+    params:
+        fullGenome = 3095677412 
+    shell:
+        r"""
+        for i in {input}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; less $i | awk '{{sum+=$3-$2}} END {{print "'"$b"'""\t"sum}}' OFS='\t'; done > {output} 
+        """
+        
+rule plot:
+    """ Plot """
+    input:
+        numberOfSegments = rules.getNumberOfSegments.output,
+        lengthDistributionOfSegments = rules.getLengthDistributionOfSegments.output,
+        genomeCoverage = rules.getGenomeCoverage.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf")
+    params:
+        script = SCRIPTS['plot']
+    shell:
+        r"""
+        Rscript {params.script} {input.numberOfSegments} {input.lengthDistributionOfSegments} {input.genomeCoverage} {output} 
+        """
