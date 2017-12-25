@@ -1,0 +1,81 @@
+import os
+
+include: "../Snakefile_config"
+
+SCRIPTS = {
+    'esi' : "scripts/esiScoreAfterMean.py",
+    'plot' : "scripts/plot.R",
+    'esi_bin_rpkm' : "scripts/binByESI_mergeWithTPM.py"
+}
+
+PARAMETERS = {
+    'cellName' : "Cells - EBV-transformed lymphocytes",
+    'filterType' : "protein_coding"
+}
+
+VALUES = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.5, 1]
+
+rule final:
+    """
+    Workflow to use GTEx RNAseq data to calculate Expression Specificity Index
+    """
+    input:
+        expand(os.path.join(DIRECTORIES['figures'], "fig.cells_ESIVsMedianTPM_scatter_min{value}.pdf"), value = VALUES),
+        expand(os.path.join(DIRECTORIES['figures'], "fig.LCL_ESIVsMedianTPM_distribution_min{value}.pdf"), value = VALUES),
+        expand(os.path.join(DIRECTORIES['intermediateFiles'], "GTEx_v6p.ESI_medianTPM_min{value}.dat"), value = VALUES)
+                
+rule makeGeneList:
+    """ Make list of Gene ID and gene type from Gencode V19 annotation"""
+    input:
+        DATA['gencode_annotation']
+    output:
+        os.path.join(DIRECTORIES['data'], "gencode.v19.genelist.txt")
+    shell:
+        r"""
+        zcat {input} | awk -F'\t' '{{print $4,$6}}' OFS='\t' | sort | uniq > {output};
+        echo -e "Name\ttype" | cat - {output} > temp.genelist; 
+        mv temp.genelist {output}
+        """
+
+rule calculateESI:
+    """ Calculate ESI for each tissue/cell type (that had more than 25 samples in GTEx) for protein coding genes """
+    input:
+        gtex_expression = DATA['gtex_expression'],
+        genelist = rules.makeGeneList.output
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "GTEx_v6p.ESI_medianTPM_min{value}.dat")
+    params:
+        script = SCRIPTS['esi'],
+        geneFilterType = PARAMETERS['filterType'],
+        value = "{value}",
+        expressionFilterTissue = PARAMETERS['cellName']
+    shell:
+        r"""
+        python {params.script} {input.gtex_expression} {output} --geneFilterList {input.genelist} --geneFilterType {params.geneFilterType} --expressionFilter {params.value} --expressionFilterTissue "{params.expressionFilterTissue}"
+        """
+
+
+rule make_LCLESI_TPM_dataframe:
+    """ Merge LCL-ESI with TPM values across all tissues """
+    input:
+        esi = rules.calculateESI.output,
+        rpkm = DATA['gtex_expression']
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "cells.LCLesi_medianTPM_min{value}.dat")
+    script:
+        SCRIPTS['esi_bin_rpkm']
+        
+rule plot:
+    """ Plot ESI by gene TPM for LCL"""
+    input:
+        rules.make_LCLESI_TPM_dataframe.output
+    output:
+        fullscatter = os.path.join(DIRECTORIES['figures'], "fig.cells_ESIVsMedianTPM_scatter_min{value}.pdf"),
+        lclDistribution = os.path.join(DIRECTORIES['figures'], "fig.LCL_ESIVsMedianTPM_distribution_min{value}.pdf")
+    params:
+        script = SCRIPTS['plot']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output.fullscatter} {output.lclDistribution}
+        """
+        
