@@ -1,0 +1,14 @@
+channels:
+  - conda-forge
+  - bioconda
+  - r
+  - defaults
+dependencies:
+  - bedtools=v2.26.0
+  - r=3.3.3
+  - python=3.6.3
+  - snakemake=4.2.0
+  - r-gridExtra=2.2.1
+  - r-reshape2=1.4.2
+  - r-ggplot2_2.2.1
+  - r-scales=0.5.0
