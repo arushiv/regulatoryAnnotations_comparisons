@@ -82,7 +82,7 @@ rule setupGREGOR:
         eqtlfile = rules.pruneUsingNCIPortal.output,
         annotations = expand(DATA['annotations'], cell=CELLS, region=REGIONS)
     output:
-        snpfile = os.path.join(DIRECTORIES['gregorRun'], "index_snpFiles", "{base}.txt".format(base=base)),
+        snpfile = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.txt".format(base=base)),
         bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.txt"),
         conf = os.path.join(DIRECTORIES['gregorRun'], "enrich.{base}.conf".format(base=base)),
     params:
