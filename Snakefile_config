@@ -1,0 +1,63 @@
+import os
+
+BASE_PATH = "/lab/work/arushiv/regulatoryAnnotations_comparisons"
+
+LINKS = {
+    'annotations' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/annotations/{cell}.{region}.annotations.bed",
+    'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.chromatinStates.bed.gz",
+    'atac_peaks' : "",
+    'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
+    'dnase_qtl' : "",
+}
+
+DATA = {
+    'annotations': os.path.join(BASE_PATH, "data/annotations/{cell}.{region}.annotations.bed"),
+    'chromatinStates' : os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.chromatinStates.bed"),
+    'gencode_annotation' : os.path.join(BASE_PATH, "data/reference/gencode.v19.tssUniq.annotation.bed.gz"),
+    'gtex_expression' : os.path.join(BASE_PATH, "data/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz"),
+    'gtex_eqtl' : os.path.join(BASE_PATH, "data/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz"),
+}
+
+DIRECTORIES = {
+    'data' : "data",
+    'intermediateFiles' : "intermediateFiles",
+    'scripts' : "scripts",
+    'figures' : "figures",
+    'logs' : "logs",
+}
+
+REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
+CELLS = ['GM12878','H1','HepG2','K562']
+CHROMATINSTATES = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
+
+rule download_annotations:
+    output:
+        protected(DATA['annotations'])
+    params:
+        link = lambda wildcards: LINKS['annotations'].format(cell=wildcards.cell, region=wildcards.region)
+    shell:
+        "wget {params.link} -O {output}"
+
+rule download_chromatinStates:
+    output:
+        expand("../data/annotations/{{cell}}.{region}.annotations.bed", region=REGIONS) 
+    params:
+        outputName = lambda wildcards: "../data/chromatinStates/{cell}.bed.gz",
+        link = lambda wildcards: LINKS['chromatinStates'].format(cell=wildcards.cell)
+    shell:
+        r"""
+        wget {params.link} -O {params.outputName}
+        gunzip {params.outputName}
+        """
+
+rule download_gencodeAnnotation:
+    output:
+        main = os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz"),
+        annot = DATA['gencode_annotation']
+    params:
+        link = LINKS['gencode_annotation'],
+    shell:
+        r"""
+        wget {params.link} -O {output.main} ;
+        zcat {output.main} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$c\t$start\t$end\t$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.annot}
+        """
