@@ -1,0 +1,64 @@
+import os
+
+include: "../Snakefile_config"
+
+subworkflow getESI:
+    workdir: os.path.join(BASE_PATH, "lclESI_GTExV7")
+    snakefile: os.path.join(BASE_PATH, "lclESI_GTExV7/Snakefile")
+                                
+SCRIPTS = {
+    'getGencodeTss' : "scripts/getGencodeTSS_allPCgenes.py",
+    'calculateECDF' : "scripts/calculateECDF.py",
+    'plot' : "scripts/plot_ECDF.R",
+}
+
+PARAMETERS = {
+    'cellName' : "Cells - EBV-transformed lymphocytes",
+}
+
+rule final:
+    """
+    Workflow to compute distance to nearest gene TSS (for genes that have ESI defined) for annotations
+    """
+    input:
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDist_ECDF.pdf"),
+
+rule getGencodeTss:
+    """
+    get TSS for genes for which ESI is defined
+    """
+    input:
+        geneList = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
+        gencode_annotation = DATA['gencode_annotation']
+    output:
+        fileFullGeneSet = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.allLclESIGenes.bed")
+    params:
+        cellName = PARAMETERS['cellName'],
+        filenameString = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin")
+    script:
+        SCRIPTS['getGencodeTss']
+        
+rule getNearestDistance_andECDF:
+    """
+    Calculate ECDF for distance to nearest gene TSS information
+    """
+    input:
+        tssFile = rules.getGencodeTss.output,
+        annotations = expand(DATA['annotations'], cell = CELLS, region = REGIONS)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "annotations_nearestDistToTss.ECDF_1.dat")
+    params:
+        script = SCRIPTS['calculateECDF']
+    shell:
+        r"""
+        python {params.script} --tssFile {input.tssFile} --bedFileList {input.annotations} --outputfile {output} 
+        """
+
+rule plot:
+    input:
+        rules.getNearestDistance_andECDF.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDist_ECDF.pdf")
+    script:
+        SCRIPTS['plot']
+
