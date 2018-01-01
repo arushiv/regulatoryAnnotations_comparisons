@@ -35,13 +35,12 @@ $ wget https://repo.continuum.io/archive/Anaconda3-5.0.1-Linux-x86_64.sh
 $ bash Anaconda3-5.0.1-Linux-x86_64.sh
 ```
 Answer yes to the user agreement; go with the default installation path or specify your own. Answer yes to prepend the install location to your PATH.
+
 Required for analyses computing enrichment of eQTL and GWAS in regulatory annotations, please install [GREGOR](https://genome.sph.umich.edu/wiki/GREGOR) manually.
 
 # Step 2: Prepare analysis directory
 Create a new directory and change into it.
 Clone this repository. This will produce the directory structure to replicate specific analyses. Edit the `BASE_PATH` in the `Snakefile_config`
-While most data should download as part of the workflow, some data has to be manually downloaded. This includes:
-- GTEx V7 RNA-seq: Download `GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz` from `https://www.gtexportal.org/home/datasets`  
 
 # Step 3: Create and activate environment
 Create an environment named `regulatory_comparisons` with the required software using the `environment.yaml` file and activate it
