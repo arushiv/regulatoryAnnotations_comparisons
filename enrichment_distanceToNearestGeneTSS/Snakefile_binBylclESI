@@ -1,0 +1,128 @@
+import os
+
+include: "../Snakefile_config"
+
+subworkflow getESI:
+    workdir: os.path.join(BASE_PATH, "lclESI_GTExV7")
+    snakefile: os.path.join(BASE_PATH, "lclESI_GTExV7/Snakefile")
+               
+SCRIPTS = {
+    'getGencodeTss' : "scripts/getGencodeTSS.py",
+    'subsampling' : "scripts/subsampleGenesAndCalculateNearestDistanceECDF.py",
+    'enrichment' : "scripts/calculateEnrichmentAfterSubsamplings.py",
+    'plot' : "scripts/plot_distanceEnrichment.R",
+}
+
+PARAMETERS = {
+    'cellName' : "Cells - EBV-transformed lymphocytes",
+    'bins' : 5
+    }
+
+config = {
+    'numberOfSubsamplings' : 100,
+    'threads' : 100
+}
+
+rule final:
+    """
+    Workflow to compute enrichment for distance to nearest protein coding gene TSS for annotations after binning by LCL ESI 
+    """
+    input:
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_Enrichment.pdf".format(config['numberOfSubsamplings'], config['threads']))
+        
+rule getGencodeTss:
+    """
+    get TSS for genes in each ESI bin [ESI is defined for protein coding genes with median LCL TPM >= 0.15]
+    """
+    input:
+        geneList = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
+        gencode_annotation = DATA['gencode_annotation']
+    output:
+        filesByBin = expand(os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin{binNumber}.bed"), binNumber = range(1, (PARAMETERS['bins'] + 1))),
+        fileFullGeneSet = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.allLclESIGenes.bed")
+    params:
+        cellName = PARAMETERS['cellName'],
+        bins = PARAMETERS['bins'],
+        filenameString = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin")
+    script:
+        SCRIPTS['getGencodeTss']
+        
+
+rule getNearestDistance:
+    """
+    For each annotation segment, compute distance to nearest gene for using hemes om each ESI bin
+    """
+    input:
+        annotations = DATA['annotations'],
+        filesByBin = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin{binNumber}.bed")
+    output:
+        temp(os.path.join(DIRECTORIES['intermediateFiles'], "nearestDistance.{cell}.{region}.{binNumber}.bed"))
+    shell:
+        r"""
+        grep -v "chrom" {input.filesByBin} | sortBed -i - | bedtools closest -d -a {input.annotations} -b - | awk '{{ print $NF"\t{wildcards.cell}\t{wildcards.region}\t{wildcards.binNumber}" }}' OFS='\t' > {output}
+        """
+
+rule merge_nearestDistanceFiles:
+    input:
+        expand(os.path.join(DIRECTORIES['intermediateFiles'], "nearestDistance.{cell}.{region}.{binNumber}.bed"), cell=CELLS, region=REGIONS, binNumber=range(1, (PARAMETERS['bins'] + 1)))
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "annotations.nearestDistanceByLclESIBin.dat")
+    params:
+        headerString = r"distance\tcell\tannotation\tbin"
+    shell:
+        r"""
+        cat {input} | sort > {output};
+        echo -e "{params.headerString}" | cat - {output} > temp.distance;
+        mv temp.distance {output}
+        """
+
+
+rule randomlySubsampleGenes_multiThread:
+    """
+    From the list of all protein coding genes, randomly subsample n genes where n=number genes in each ESI bin. 
+    Then for each subsampling, get distance to nearest gene in the subsampling For each annotation segment
+    """
+    input:
+        geneTss = rules.getGencodeTss.output.fileFullGeneSet,
+        esifile = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
+        annotations = expand(DATA['annotations'], cell = CELLS, region = REGIONS), 
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "sampledECDFs", "SamplingsPC_{Threads}Threads.ecdf")
+    params:
+        colNumber = 4,
+        runs = config['numberOfSubsamplings'],
+        script = SCRIPTS['subsampling'],
+        bins = PARAMETERS['bins']
+    log: "logs/Samplings_{Threads}.log"
+    shell:
+        r"""
+        python {params.script} {input.geneTss} {output} --bedFileList {input.annotations} --numberOfGenesFile {input.esifile} --bins {params.bins} --colNumber {params.colNumber} --runs {params.runs} --threadNumber {wildcards.Threads} 
+        """
+        
+rule computeEnrichment:
+    """
+    Compile all ECDFs, compute mean and standard deviation.
+    Then calculate enrichment
+    """
+    input:
+        sampledECDFs = expand(os.path.join(DIRECTORIES['intermediateFiles'], "sampledECDFs", "SamplingsPC_{Threads}Threads.ecdf"), Threads=range(config['threads'])),
+        nearestDistanceResults = rules.merge_nearestDistanceFiles.output
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "annotations_nearestDistByLclESIBin_subsampled{0}_threaded{1}.Enrichment.dat".format(config['numberOfSubsamplings'], config['threads']))
+    params:
+        script = SCRIPTS['enrichment']
+    shell:
+        r"""
+        python {params.script} {input.nearestDistanceResults} {output} --ecdfFileList {input.sampledECDFs};
+        """
+        
+rule plot:
+    input:
+        rules.computeEnrichment.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_Enrichment.pdf".format(config['numberOfSubsamplings'], config['threads']))       
+    script:
+        SCRIPTS['plot']
+
+
+     
