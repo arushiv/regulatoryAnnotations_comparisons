@@ -1,7 +1,7 @@
 __default__:
-  time: "15:00"
+  time: "1:00:00"
   cpus: 1
-  mem: "2000M"
+  mem: "4000M"
   jobname: "sjob.{rule}.{wildcards}"
   output: "logs/slurm-%A_%a.{rule}.{wildcards}.out"
   error: "logs/slurm-%A_%a.{rule}.{wildcards}.err"
