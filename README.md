@@ -1,7 +1,7 @@
 # Regulatory Annotations Comparisons
 This repository contains code to reproduce results of the manuscript:
 
-Each directory contains code for analyses specific to different figures of the paper. Everything is run using [snakemake](http://snakemake.readthedocs.io/en/latest/). These directories follow this general pattern:
+Each directory contains code for analyses specific to different figures of the paper. Everything is run using [snakemake](http://snakemake.readthedocs.io/en/latest/). The analysis directories follow this general pattern:
 ```	
 ├── .gitignore
 ├── README.md
@@ -55,7 +55,7 @@ $ snakemake --help
 # Step 4: Execute analyses
 Now change to the analysis directories and run snakemake using the respective Snakefiles. Each Snakefile will check for and download required data if missing as per the `Snakefile_config` in the top directory.
 
-Below are the analysis directories for each figure:
+Below are the analysis directories corresponding to each figure:
 ```	
 ├── Fig 2A-D: `summaryStatistics`
 ├── Fig 3: `coverageChromatinStates`
