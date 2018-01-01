@@ -7,3 +7,17 @@ and plot these summary statistics for annotations (Fig. 1 A,B,C)
 
 Also compute overlap fractions and plot heatmap (Fig. 1D)
 Does not require cluster submission.
+
+## dry run
+```
+$	snakemake -np
+```
+## Run
+```
+$	snakemake -p --latency-wait 400
+```
+	
+## print workflow
+```
+	snakemake --dag | dot -Tsvg > workflow.svg
+```
