@@ -57,12 +57,18 @@ Now change to the analysis directories and run snakemake using the respective Sn
 
 Below are the analysis directories corresponding to each figure:
 ```	
-├── Fig 2A-D: `summaryStatistics`
-├── Fig 3: `coverageChromatinStates`
-├── Fig 4A: `enrichment_distanceToNearestGeneTSS`
-│   └── Automatically runs subworkflow in `lclESI_GTExV7`
+├── Fig 2A-D: `summaryStatistics` :: `Snakefile`
+├── Fig 3: `coverageChromatinStates` :: `Snakefile`
+├── Fig 4A: `enrichment_distanceToNearestGeneTSS` :: `Snakefile_binBylclESI`
+│   ├── Supplementary Fig. S2 :: `Snakefile_allPCgenes`	
+│   └── Supplementary Fig S4: Automatically runs subworkflow in `lclESI_GTExV7`
 ├── Fig 4B: `enrichment_eQTL`
+│   ├── Supplementary Fig. S3 :: `Snakefile_bulkEnrichment`	
 │   └── Automatically runs subworkflow in `lclESI_GTExV7`
-├── Fig 5A-C: `qtl_effectSizeDistribution`
+├── Fig 5: `qtl_effectSizeDistribution`
+    ├── Fig 5A :: `` 
+    ├── Fig 5B :: ``
+    └── Fig 5C :: ``
+
 ```
 	
