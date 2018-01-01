@@ -5,7 +5,7 @@ Each directory contains code for analyses specific to different figures of the p
 ```	
 ├── .gitignore
 ├── README.md
-├── config.yml : Cluster config specifications 
+├── config.yml : Cluster config specifications (if analysis is recommended to be run on a cluster)
 ├── scripts : Scripts for analyses
 │   ├── script1.py
 │   └── script2.R
@@ -22,9 +22,9 @@ The analyses use the following software:
 * Python 3.6.3
 * Snakemake 4.2.0
 * R 3.3.3	
-* bedtools v2.26.0
+* bedtools 2.26.0
 * GREGOR 1.2.1
-* GAT
+* GAT 1.3.5
 
 To setup these pre-requisites, use the Anaconda/Miniconda Python3 distribution. The Conda package manager is used to obtain and deploy the defined software packages in the specified versions. These instructions are for the Linux platform
 	
@@ -35,11 +35,13 @@ $ wget https://repo.continuum.io/archive/Anaconda3-5.0.1-Linux-x86_64.sh
 $ bash Anaconda3-5.0.1-Linux-x86_64.sh
 ```
 Answer yes to the user agreement; go with the default installation path or specify your own. Answer yes to prepend the install location to your PATH.
+Required for analyses computing enrichment of eQTL and GWAS in regulatory annotations, please install [GREGOR](https://genome.sph.umich.edu/wiki/GREGOR) manually.
 
 # Step 2: Prepare analysis directory
 Create a new directory and change into it.
-Download data files from the tar archive - this will set up a data/ folder with annotation files used in for the manuscript
-Clone this repository
+Clone this repository. This will produce the directory structure to replicate specific analyses. Edit the `BASE_PATH` in the `Snakefile_config`
+While most data should download as part of the workflow, some data has to be manually downloaded. This includes:
+- GTEx V7 RNA-seq: Download `GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz` from `https://www.gtexportal.org/home/datasets`  
 
 # Step 3: Create and activate environment
 Create an environment named `regulatory_comparisons` with the required software using the `environment.yaml` file and activate it
@@ -51,4 +53,17 @@ Now you can use the installed tools. Check if all went fine:
 ```
 $ snakemake --help
 ```
-	 
+# Step 4: Execute analyses
+Now change to the analysis directories and run snakemake using the respective Snakefiles. Each Snakefile will check for and download required data if missing as per the `Snakefile_config` in the top directory.
+
+Below are the analysis directories for each figure:
+```	
+├── Fig 2A-D: `summaryStatistics`
+├── Fig 3: `coverageChromatinStates`
+├── Fig 4A: `enrichment_distanceToNearestGeneTSS`
+│   └── Automatically runs subworkflow in `lclESI_GTExV7`
+├── Fig 4B: `enrichment_eQTL`
+│   └── Automatically runs subworkflow in `lclESI_GTExV7`
+├── Fig 5A-C: `qtl_effectSizeDistribution`
+```
+	
