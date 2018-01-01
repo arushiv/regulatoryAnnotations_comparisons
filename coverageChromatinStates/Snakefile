@@ -1,6 +1,4 @@
 import os
-import pandas
-import subprocess as sp
 
 include: "../Snakefile_config"
 
