@@ -8,8 +8,6 @@ and plot these summary statistics for annotations (Fig. 1 A,B,C)
 Also compute overlap fractions and plot heatmap (Fig. 1D)
 Does not require cluster submission.
 
-.. image:: https://github.com/arushiv/regulatoryAnnotations_comparisons/blob/master/summaryStatistics/workflow.svg
-
 ## Dry run
 ```
 $	snakemake -np
