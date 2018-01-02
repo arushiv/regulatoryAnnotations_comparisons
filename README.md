@@ -53,7 +53,7 @@ Now you can use the installed tools. Check if all went fine:
 $ snakemake --help
 ```
 # Step 4: Execute analyses
-Now change to the analysis directories and run snakemake using the respective Snakefiles. Each Snakefile will check for and download required data if missing as per the `Snakefile_config` in the top directory.
+Now change into the analysis directories and run snakemake using the respective Snakefiles. Each Snakefile will check for and download required data if missing as per the `Snakefile_config` in the top directory.
 
 Below are the analysis directories corresponding to each figure:
 ```	
@@ -61,14 +61,17 @@ Below are the analysis directories corresponding to each figure:
 ├── Fig 3: `coverageChromatinStates` :: `Snakefile`
 ├── Fig 4A: `enrichment_distanceToNearestGeneTSS` :: `Snakefile_binBylclESI`
 │   ├── Supplementary Fig. S2 :: `Snakefile_allPCgenes`	
-│   └── Supplementary Fig S4: Automatically runs subworkflow in `lclESI_GTExV7`
-├── Fig 4B: `enrichment_eQTL`
+│   ├── Supplementary Fig S4: Automatically runs subworkflow in `lclESI_GTExV7`
+│   └──	Supplementary Fig S5 :: `Snakefile_binBylclESI`
+├── Fig 4B: `enrichment_eQTL` :: `Snakefile_binByESI`
 │   ├── Supplementary Fig. S3 :: `Snakefile_bulkEnrichment`	
-│   └── Automatically runs subworkflow in `lclESI_GTExV7`
+│   ├── Automatically runs subworkflow in `lclESI_GTExV7`
+│   └──	Supplementary Fig S6 :: `Snakefile_binByESI`	
 ├── Fig 5: `qtl_effectSizeDistribution`
-    ├── Fig 5A :: `` 
-    ├── Fig 5B :: ``
-    └── Fig 5C :: ``
+    ├── Fig 5A :: `Snakefile_eQTLEffect`
+    ├── Supplementary Fig S7 :: `Snakefile_eQTLEffect`	
+    ├── Fig 5B :: `Snakefile_dsQTLEffect`
+    └── Fig 5C :: `Snakefile_allelicBiasEffect`
 
 ```
 	
