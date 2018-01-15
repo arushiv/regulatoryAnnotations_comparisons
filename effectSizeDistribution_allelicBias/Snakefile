@@ -1,0 +1,87 @@
+import os
+
+include: "../Snakefile_config"
+
+SCRIPTS = {
+    'plot' : "scripts/plot.R"
+}
+
+rule final:
+    """
+    Plot absolute deviation from expectation for allelic biased SNPs lying in different annotations
+    """
+    input:
+        os.path.join(DIRECTORIES['figures'], "fig.deviationFromExpectation_minCov10_qval05.pdf")
+
+
+headerList = ["chrom", "start", "end", "allele_1", "allele_2", "ref", "total_coverage", "ref_coverage", "fraction_ref", "p.value", "significant", "neg_log_10_p.value", "SNP_pair"]
+headerString_getExpectedFracRef = ' '.join(headerList)
+# headerString_getExpectedFracRef = """ "%s" """ %(headerString_getExpectedFracRef)
+
+rule getExpectedFracRef:
+    """
+    Columns in datafile are "chromosome", "start", "end", "allele_1", "allele_2", "ref", "total_coverage", "ref_coverage", "fraction_ref", "p.value", "significant", "neg_log_10_p.value", "SNP_pair".
+    The file includes all SNPs with minimum coverage = 3.
+    """
+    input:
+        fracRef = DATA['gm_expected_deviation'],
+        datfile = DATA['gm_allelic_bias']
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.allelicBiasResults.FracRef.dat")
+    shell:
+        """python ~arushiv/toolScripts/merge2FilesByColnames.py {input.datfile} {input.fracRef} {output} -h1 {headerString_getExpectedFracRef} -h2 SNP_pair expectedFracRef -t inner -on SNP_pair  """
+
+
+rule performFilteringAndGetQvalues:
+    input:
+        rules.getExpectedFracRef.output
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.allelicBiasResults.FracRef.filterQvalues.coverageFilterQvals.dat")
+    script:
+        os.path.join(DIRECTORIES['scripts'], "coverageFilt_qvalue.R")
+
+rule getMAF:
+    input:
+        rules.performFilteringAndGetQvalues.output
+    output:
+        # "getMAF.dr"
+        os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.allelicBiasResults.FracRef.filterQvalues.coverageFilterQvals.withMAF.dat")
+    run:
+        with open(input[0], 'r') as f:
+            headerString_getMAF = f.readline().rstrip()
+        print(headerString_getMAF)
+        shell(r""" python %s {input} {output} --now -od %s  -name getMAF.dr -pop EUR_AF -h1 {headerString_getMAF}""" %(os.path.join(DIRECTORIES['scripts'], "getMAFfrom1000gvcf_new.py"), DIRECTORIES['intermediateFiles']))
+
+
+# headerString_intersectAnnotations = '\\t'.join(headerList)
+# headerString_intersectAnnotations = """ "%s" """ %(headerString_intersectAnnotations)
+        
+rule intersectAnnotations:
+    input:
+        snp = rules.getMAF.output,
+        annotations = expand(DATA['annotations'], cell="GM12878", region=REGIONS)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.allelicBiasResults.FracRef.filterQvalues.coverageFilterQvals.withMAF.annotations.dat")
+    run:
+        with open(input[0], 'r') as f:
+            headerString_intersectAnnotations = f.readline().rstrip() + '\tcell\tannotation'
+            print(headerString_intersectAnnotations)
+        shell(
+            r"""
+            for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.snp} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done > {output};
+            echo {headerString_intersectAnnotations} | cat - {output} > temp;
+            mv temp {output};
+            """
+            )
+
+rule plot:
+    input:
+        rules.intersectAnnotations.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.deviationFromExpectation_minCov10_qval05.pdf")
+    params:
+        script = SCRIPTS['plot']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
