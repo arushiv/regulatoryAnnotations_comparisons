@@ -220,3 +220,27 @@ rule regress:
         python {params.script} --inputfile {input} --typereg intpeaks > {output};
         """
                                                                     
+rule setup_powerCalc:
+    input:
+        expand(rules.intersectAnnotations.output.main, fdr=0.1, prune_r2=0.8, maf=0.2, gregor_r2=0.99)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
+    run:
+        d = pandas.read_csv(input[0], sep="\t")
+        d.drop_duplicates(['chrom','snp','annotation'], inplace=True)
+        d.loc[:,'absoluteEffect'] = abs(d['slope'])
+        nd = d.groupby('annotation')['absoluteBeta'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
+        nd.to_csv(output[0], sep='\t', index=False)
+        
+rule plot_power:
+    input:
+        rules.setup_powerCalc.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "GM12878.powerCalc.pdf")
+    params:
+        script = SCRIPTS['powerCalc']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
+                                                                                                                                                        
