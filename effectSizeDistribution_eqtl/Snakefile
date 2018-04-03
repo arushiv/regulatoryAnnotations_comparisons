@@ -33,7 +33,7 @@ rule final:
     """
     input:
         expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = PARAMETERS['fdr']),
-        expand(os.path.join(PARAMETERS['output_directory'], "gtexV7.significantfdr{fdr}.maf{maf}.clumped"), fdr = PARAMETERS['fdr'], maf = PARAMETERS['maf']),
+        expand(os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"), fdr = PARAMETERS['fdr'], maf = PARAMETERS['maf']),
 
         # expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
         #        fdr = PARAMETERS['fdr'], prune_r2 = PARAMETERS['prune_r2'], maf = PARAMETERS['maf'], gregor_r2 = PARAMETERS['gregor_r2']),
@@ -51,7 +51,7 @@ rule formatEqtlFile:
         d.rename(columns={'rs_id_dbSNP147_GRCh37p13' : 'SNP', 'chr' : 'chrom'}, inplace=True)
         d = d[d['qval'] <= float(wildcards.fdr)]
         d.sort_values(['qval'], inplace=True)
-        d.drop_duplicates(['snp'], inplace=True) # if SNP associated with 2 or more genes, keep the stronger association
+        d.drop_duplicates(['SNP'], inplace=True) # if SNP associated with 2 or more genes, keep the stronger association
         d.to_csv(output.full, sep='\t', index=False)
 
 rule plotEffectVsMAF:
@@ -83,6 +83,8 @@ rule setup_eqtl_for_pruning:
         d.to_csv(output.full, sep='\t', index=False)
         d[['SNP']].to_csv(output.snplist, header=False, index=False)
 
+rule getProxies:
+    
 # rule organize_pruned_results:
 #     """
 #     Organize 
