@@ -1,0 +1,63 @@
+import argparse
+import pandas
+
+DATA = {
+    'input_position_file': "gwas20.txt",
+    'output_file_name': "",
+    'vcf': "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+    'vcf_sampleInfo': "/lab/data/genomes/human/hg19/1000GenomesDownloads/igsr_3990samples_allPopulations.tsv",
+}
+
+PARAMETERS = {
+    'population_type': "Superpopulation code",  # Choose which column in vcf_sampleInfo file to subset samples on. Another option could be "Population code" to subest by population
+    'population_code': "EUR",
+    'output_directory': "intermediateFiles/ldbuddiesFrom1000g",  # Where output will be saved
+    'output_string': "testchr20genoq", # output string for vcftools
+    'ldwindow': 1000000,
+    'r2': 0.99
+}
+
+rule final_getLDproxies:
+    """
+    Workflow for getting LD proxies using vcftools with 1000g vcfs
+    Options defined in config file
+    Population codes or Superpopulation codes can be used to subset 1000g samples  
+    Include this workflow as part of other workflow requiring proxies 
+    """
+    input:
+        main = expand(os.path.join(PARAMETERS['output_directory'], "{output_string}.proxies.dat"), output_string=PARAMETERS['output_string']),
+
+   
+rule setup_vcfTools:
+    input:
+        snpfile = DATA['vcf'],
+        samplefile = rules.makeSampleFile.output.samplefile,
+        posfile = DATA['input_position_file'],
+    output:
+        os.path.join(PARAMETERS['output_directory'], "{output_string}.chr{chrom}.list.geno.ld")
+    params:
+        outstring = os.path.join(PARAMETERS['output_directory'], "{output_string}.chr{chrom}"),
+        ldwindow = PARAMETERS['ldwindow'],
+        r2 = PARAMETERS['r2'],
+    shell:
+        r"""
+        vcftools --gzvcf {input.snpfile}  --keep {input.samplefile} \
+        --remove-indels \
+        --geno-r2-positions {input.posfile} \ 
+        --ld-window-bp {params.ldwindow} \
+        --min-r2 {params.r2} \
+        --out {params.outstring}
+        """
+    
+rule mergeWithOriginal:
+    input:
+        proxies = expand(os.path.join(PARAMETERS['output_directory'], "{{output_string}}.chr{chrom}.list.geno.ld"), chrom=20),
+    output:
+        main = os.path.join(PARAMETERS['output_directory'], "{output_string}.proxies.dat"),
+        tempfile = temp(os.path.join(PARAMETERS['output_directory'], "{output_string}.proxies.dat.temp"))
+    shell:
+        r"""
+        cat {input.proxies} | grep -v "R^2" | sort | uniq  > {output.tempfile} ;
+        echo -e "CHR1\tPOS1\tCHR2\tPOS2\tN_INDV\tR^2" | cat - {output.tempfile} > {output.main}
+        """
+# CHR1    POS1    CHR2    POS2    N_INDV  R^2

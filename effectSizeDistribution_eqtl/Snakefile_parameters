@@ -1,0 +1,15 @@
+PARAMETERS = {
+    # general
+    'fdr' : 0.1,
+    'maf' : 0.2,
+    # prune
+    'population_type': "Superpopulation code",  # Choose which column in vcf_sampleInfo file to subset samples on. Another option could be "Population code" to subest by population
+    'population_code': "EUR",
+    'output_directory': "intermediateFiles/prune",  # Where output will be saved
+    'prune_r2' : 0.8,
+    '1000g_maf' : 0.05, # Min MAF in popluation considered to avoid ultra low freq alleles that result in duplicate rsIDs due to which plink fails
+    # get proxy
+    'POPULATION' : "EUR",
+    'proxy_r2' : [0.99],
+    'ldwindow': 1000000,   
+}          

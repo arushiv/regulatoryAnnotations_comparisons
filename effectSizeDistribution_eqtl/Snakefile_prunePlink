@@ -1,0 +1,78 @@
+import argparse
+import pandas
+
+"""
+Workflow for pruning a list od SNPs using P value of association, using 1000g phase 3 vcf. Population codes or Superpopulation codes can be used to subset 1000g samples  
+Include this workflow as part of other workflow requiring proxies 
+Vcf files first subset by the selected population, MAF 0.01 filter is applied that avoids any duplicates rsID 
+that arise due to very low frequency rare third or more alleles. Also, all indels are removed.
+Pruning is done using --clump flags
+"""
+
+rule makeSampleFile:
+    input:
+        sampleInfo = DATA['vcf_sampleInfo']
+    output:
+        samplefile = os.path.join(PARAMETERS['output_directory'], "subsetSamples.txt")
+    run:
+        d = pandas.read_csv(input.sampleInfo, sep='\t')
+        d = d[d[PARAMETERS['population_type']] == PARAMETERS['population_code']]
+        d[['Sample name']].to_csv(output[0], header=False, index=False)
+
+rule subsetVCF:
+    input:
+        snpfile = DATA['1000g'],
+        samplefile = rules.makeSampleFile.output.samplefile,
+        posfile = os.path.join(DIRECTORIES['intermediateFiles'], "snplist_to_subset.significantfdr{fdr}.maf{maf}.dat"), #rules.setup_eqtl_for_pruning.output.snplist
+    output:
+        vcf = temp(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
+        index = temp(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz.tbi")),
+    params:
+        outstring = os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}"),
+        maf = PARAMETERS['1000g_maf'],
+    shell:
+        r"""
+        vcftools --gzvcf {input.snpfile}  --keep {input.samplefile} \
+        --remove-indels --maf {params.maf} \
+        --snps {input.posfile} \
+        --out {params.outstring} --recode ;
+        bgzip {params.outstring}.recode.vcf
+        tabix {output.vcf}
+        """
+
+rule get_plink_files:
+    """Make plink format input files after filtering 1000g vcf. IMP - vcf files are usually large so designated to be temp """
+    input:
+        vcf = expand(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz"), chrom = CHROM),
+        index = expand(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz.tbi"), chrom = CHROM)
+    output:
+        vcf = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
+        mapfile = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.map")),
+        pedfile = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.ped")),
+    params:
+        outstring = os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}"),
+    shell:
+        r"""
+        vcf-concat {input.vcf} | bgzip -c > {output.vcf} ;
+        vcftools --gzvcf {output.vcf} --plink --out {params.outstring}
+        """
+
+rule prune_plink:
+    input:
+        mapfile = rules.get_plink_files.output.mapfile,
+        pedfile = rules.get_plink_files.output.pedfile,
+        inputfile = os.path.join(DIRECTORIES['intermediateFiles'], "forPruning.gtexV7.significantfdr{fdr}.maf{maf}.dat") #rules.setup_eqtl_for_pruning.output.full
+    output:
+        clumpedfile = os.path.join(PARAMETERS['output_directory'], "gtexV7.significantfdr{fdr}.maf{maf}.clumped"),
+    params:
+        outstring = os.path.join(PARAMETERS['output_directory'], "gtexV7.significantfdr{fdr}.maf{maf}"),#rules.get_plink_files.params.outstring,
+        r2 = PARAMETERS['prune_r2'],
+        p1 = lambda wildcards: wildcards.fdr,
+        p2 = lambda wildcards: wildcards.fdr,
+    shell:
+        r"""
+        /lab/sw/modules/plink/1.9/bin/plink --file {params.outstring} \
+        --clump {input.inputfile} --clump-r2 {params.r2} --clump-p1 {params.p1} --clump-p2 {params.p2} \
+        --out {params.outstring}
+        """
+        
