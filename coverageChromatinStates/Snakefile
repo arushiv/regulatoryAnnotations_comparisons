@@ -25,7 +25,11 @@ rule getOverlapFraction:
         tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "annotations_chromatinStateOverlap.dat.temp"))
     shell:
         r"""
-        for f1 in {input.annotations}; do nf1=`basename $f1 .annotations.bed | sed -e 's:\.:\t:g'`; len_f1=`less $f1 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; for f2 in {input.chromatinState}; do nf2=`basename $f2 .bed | sed -e 's:\.:\t:g'`; len_intersect=`intersectBed -a $f1 -b $f2 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; echo -e "$nf1\t$nf2\t$len_f1\t$len_intersect" ; done; done > {output.tempout};
+        for f1 in {input.annotations}; do nf1=`basename $f1 .annotations.bed | sed -e 's:\.:\t:g'`; 
+        len_f1=`less $f1 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; 
+        for f2 in {input.chromatinState}; do nf2=`basename $f2 .bed | sed -e 's:\.:\t:g'`; 
+        len_intersect=`intersectBed -a $f1 -b $f2 | awk 'BEGIN{{SUM=0}}{{ SUM+=$3-$2 }}END{{print SUM}}'`; echo -e "$nf1\t$nf2\t$len_f1\t$len_intersect" ; 
+        done; done > {output.tempout};
         echo -e "cell1\tannotation\tcell2\tchromatinState\tannotation_length\tstateOverlapLength" | cat - {output.tempout} > {output.main}
         """
 
