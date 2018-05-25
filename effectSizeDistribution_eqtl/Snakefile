@@ -2,7 +2,6 @@ import os
 import pandas
 
 include: "../Snakefile_config"
-include: "Snakefile_parameters"
 include: "Snakefile_prunePlink"
 
 # include: "Snakefile_getProxies"
@@ -32,13 +31,11 @@ rule final:
     4. Intersect with annotations and plot
     """
     input:
-        expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = PARAMETERS['fdr']),
-        expand(os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"), fdr = PARAMETERS['fdr'], maf = PARAMETERS['maf']),
-
-        # expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
-        #        fdr = PARAMETERS['fdr'], prune_r2 = PARAMETERS['prune_r2'], maf = PARAMETERS['maf'], gregor_r2 = PARAMETERS['gregor_r2']),
-        # expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
-        #        fdr = PARAMETERS['fdr'], prune_r2 = PARAMETERS['prune_r2'], maf = PARAMETERS['maf'], gregor_r2 = PARAMETERS['gregor_r2'])
+        expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
+        expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
+               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2'])
         
 rule formatEqtlFile:
     """Select by FDR threshold, retain 1 assocaiation per SNP """
@@ -69,8 +66,12 @@ rule plotEffectVsMAF:
 rule setup_eqtl_for_pruning:
     """
     Filter by MAF and setup file header names for plink clump input
-    Pruning using Snakefile_prunePlink
-    Then use Snakefile_getProxies to fetch proxies"""
+    Pruning and proxy fetching using Snakefile_prunePlink
+    Comparing pruning using plink vs NCI browser: plink workflow retains more SNPs that leads to duplicates when proxy SNPs are fetched
+    !! Pruning step brings more SNPs than when pruned using the NCI browser. Possibly because some SNPs were removed from input list as NCI browser gives errors. 
+    Also while using plink, since only biallelic SNPs are retained, all other SNPs were manually added to the list later.
+    Comparing fetching proxy SNPs using vcftools vs GREGOR output - similar proxy SNPs were fetched 
+    """
     input:
         rules.formatEqtlFile.output.full
     output:
@@ -83,94 +84,65 @@ rule setup_eqtl_for_pruning:
         d.to_csv(output.full, sep='\t', index=False)
         d[['SNP']].to_csv(output.snplist, header=False, index=False)
 
-rule getProxies:
-    
-# rule organize_pruned_results:
-#     """
-#     Organize 
-#     """
 
-                                                                                                           
-# rule organizeEqtlDF:
-#     """
-#     Merge proxies with pruned eQTL lead SNPs
-#     remove unwanted columns
-#     """
-#     input:
-#         proxyfile = rules.getProxies.output,
-#         eqtlfile = rules.pruneUsingNCIPortal.output
-#     output:
-#         os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
-#     run:
-#         eqtlfile = pandas.read_csv(input.eqtlfile[0], sep='\t')
-#         eqtlfile.loc[:,'chrom'] = eqtlfile['chrom'].map(lambda x: "chr{chrom}".format(chrom=x))
-#         eqtlfile.rename(columns={'pos' : 'indexPos'}, inplace=True)
-        
-#         proxyfile = pandas.read_csv(input.proxyfile[0], sep='\t', header=None, names=['chrom','proxyStart','proxyEnd','indexPos'])
-#         outdf = pandas.merge(proxyfile, eqtlfile, how="right", on=['chrom','indexPos'])
-#         outdf.proxyEnd.fillna(outdf.indexPos, inplace=True)
-#         outdf.proxyStart.fillna(outdf.indexPos - 1, inplace=True)
-#         outdf[['proxyStart','proxyEnd']] = outdf[['proxyStart','proxyEnd']].astype(int)
-#         d1 = outdf.groupby(['chrom','indexPos','gene_name']).size().reset_index(name='totalnumLD')
-#         ndf = pandas.merge(outdf, d1, how="left", on=['chrom','indexPos','gene_name'])
-#         ndf.to_csv(output[0], sep='\t', index=False, na_rep="NA")
+def getHeaderList(filename, extendlist):
+    with open(filename, 'r') as f:
+        l = f.readline().rstrip().split('\t')
+        l.extend(extendlist)
+        return l
 
-# def getHeaderList(filename, extendlist):
-#     with open(filename, 'r') as f:
-#         l = f.readline().rstrip().split('\t')
-#         l.extend(extendlist)
-#         return l
-
-# rule getHeaderString:
-#     input:
-#         proxyfile = rules.organizeEqtlDF.output
-#     output:
-#         os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
-#     run:
-#         var = '\t'.join(getHeaderList(input.proxyfile[0], ['cell','annotation']))
-#         with open(output[0], 'w') as the_file:
-#             the_file.write("{var}\n".format(var=var))
+rule getHeaderString:
+    """Get header of file after pruning and proxy fetching from included Snakefile """
+    input:
+        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"),
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
+    run:
+        var = '\t'.join(getHeaderList(input.proxyfile, ['cell','annotation']))
+        with open(output[0], 'w') as the_file:
+            the_file.write("{var}\n".format(var=var))
             
-# rule intersectAnnotations:
-#     """
-#     Intersect annotations with eQTL proxy SNPs
-#     """
-#     input:
-#         eqtlfile = rules.organizeEqtlDF.output,
-#         annotations = expand(DATA['annotations'], cell="GM12878", region = REGIONS),
-#         headerString = rules.getHeaderString.output
-#     output:
-#         main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat"),
-#         tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat.temp"))
-#     shell:
-#         r"""
-#         for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.eqtlfile} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done | sort | uniq  > {output.tempout};
-# g        cat {input.headerString} {output.tempout} > {output.main};
-#         """
+
+rule intersectAnnotations:
+    """
+    Intersect annotations with eQTL proxy SNPs
+    """
+    input:
+        eqtlfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"),
+        annotations = expand(DATA['annotations'], cell="GM12878", region = REGIONS),
+        headerString = rules.getHeaderString.output
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat"),
+        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat.temp"))
+    shell:
+        r"""
+        for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.eqtlfile} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done | sort | uniq  > {output.tempout};
+        cat {input.headerString} {output.tempout} > {output.main};
+        """
     
-# rule plot:
-#     input:
-#         rules.intersectAnnotations.output.main
-#     output:
-#         os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf")
-#     params:
-#         script = SCRIPTS['plot']
-#     shell:
-#         r""" 
-#         Rscript {params.script} {input} {output}
-#         """ 
+rule plot:
+    input:
+        rules.intersectAnnotations.output.main
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf")
+    params:
+        script = SCRIPTS['plot']
+    shell:
+        r""" 
+        Rscript {params.script} {input} {output}
+        """ 
         
-# rule regress:
-#     input:
-#         rules.intersectAnnotations.output.main
-#     output:
-#         os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
-#     params:
-#         script = SCRIPTS['regression']
-#     shell:
-#         r"""
-#         python {params.script} --inputfile {input} --typereg intpeaks > {output};
-#         """
+rule regress:
+    input:
+        rules.intersectAnnotations.output.main
+    output:
+        os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+    params:
+        script = SCRIPTS['regression']
+    shell:
+        r"""
+        python {params.script} --inputfile {input} --typereg intpeaks > {output};
+        """
                                                                     
 # rule setup_powerCalc:
 #     input:
@@ -196,3 +168,28 @@ rule getProxies:
 #         Rscript {params.script} {input} {output}
 #         """
                                                                                                                                                         
+
+                                                                                                           
+# rule organizeEqtlDF:
+#     """
+#     Merge proxies with pruned eQTL lead SNPs
+#     remove unwanted columns
+#     """
+#     input:
+#         proxyfile = rules.getProxies.output,
+#         eqtlfile = rules.pruneUsingNCIPortal.output
+#     output:
+#         os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
+#     run:
+#         eqtlfile = pandas.read_csv(input.eqtlfile[0], sep='\t')
+#         eqtlfile.loc[:,'chrom'] = eqtlfile['chrom'].map(lambda x: "chr{chrom}".format(chrom=x))
+#         eqtlfile.rename(columns={'pos' : 'indexPos'}, inplace=True)
+        
+#         proxyfile = pandas.read_csv(input.proxyfile[0], sep='\t', header=None, names=['chrom','proxyStart','proxyEnd','indexPos'])
+#         outdf = pandas.merge(proxyfile, eqtlfile, how="right", on=['chrom','indexPos'])
+#         outdf.proxyEnd.fillna(outdf.indexPos, inplace=True)
+#         outdf.proxyStart.fillna(outdf.indexPos - 1, inplace=True)
+#         outdf[['proxyStart','proxyEnd']] = outdf[['proxyStart','proxyEnd']].astype(int)
+#         d1 = outdf.groupby(['chrom','indexPos','gene_name']).size().reset_index(name='totalnumLD')
+#         ndf = pandas.merge(outdf, d1, how="left", on=['chrom','indexPos','gene_name'])
+#         ndf.to_csv(output[0], sep='\t', index=False, na_rep="NA")
