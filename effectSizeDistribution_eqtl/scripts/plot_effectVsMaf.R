@@ -15,6 +15,13 @@ densityEffect <- function(d){
     return(p)
 }
 
+densityMAF <- function(d){
+    p <- ggplot(d, aes(maf), cex.lab=1) +
+        geom_density() +
+        theme(panel.background=element_rect(fill="white", color="black"), panel.grid=element_blank())
+    return(p)
+}
+
 makeplot <- function(){
     p <- ggplot(d, aes(y=absEffect, x=maf), cex.lab=1) +
         geom_point(size=1, alpha=0.4) +
@@ -26,5 +33,6 @@ makeplot <- function(){
 
 pdf(args[2], height=6, width=6)
 densityEffect(d)
+densityMAF(d)
 makeplot()
 dev.off()
