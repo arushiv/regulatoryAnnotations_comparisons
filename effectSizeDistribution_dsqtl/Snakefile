@@ -2,6 +2,7 @@ import os
 import pandas
 
 include: "../Snakefile_config"
+include: "Snakefile_prunePlink"
 
 DIRECTORIES.update({
     'eqtlIndexDir' : "gregorRun/index_snpFiles",
@@ -15,27 +16,13 @@ SCRIPTS = {
     'proxyFromGREGOR' : "scripts/gregorOutputCompileLdSnps.py",
 }
 
-
-PARAMETERS = {
-    'POPULATION' : "YRI",
-    'POP_gregor' : "AFR",
-    'prune_r2' : 0.8,
-    'gregor_r2' : [0.99],
-    'maf' : 0.2,
-    'cores': 10
-}
-
 rule final:
     """
-    Plot absolute deviation from expectation for allelic biased SNPs lying in different annotations
+    Plot effect size for dsQTL lying in different annotations
     """
     input:
-        expand(os.path.join(DIRECTORIES['figures'], "fig.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"), prune_r2=PARAMETERS['prune_r2'], maf=PARAMETERS['maf'], gregor_r2=PARAMETERS['gregor_r2'])
+        effectSize = expand(os.path.join(DIRECTORIES['figures'], "fig.dsqtl.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.pdf"), prune_r2=config['prune_r2'], maf=config['maf'], proxy_r2=config['proxy_r2'])
 
-        # os.path.join(DIRECTORIES['figures'], "fig.effectSize_dsQTL.pdf")
-headerList = ["chrom", "start", "end", "allele_1", "allele_2", "ref", "total_coverage", "ref_coverage", "fraction_ref", "p.value", "significant", "neg_log_10_p.value", "SNP_pair"]
-headerString_getExpectedFracRef = ' '.join(headerList)
-# headerString_getExpectedFracRef = """ "%s" """ %(headerString_getExpectedFracRef)
 
 rule makeBedfile:
     """ dsQTL table from Degner et al. Nature 2012 gives a full list of all DNase sensitivity quantitative trait loci (dsQTLs) identified using a 2 kb cis-candidate window around each 100bp test window.   Columns correspond to the chromosome start and end for the 100 bp window where DNase sensitivity was measured, the location of the most significantly associated SNP, the estimated effect size, standard error of this estimate, the t-statistic, and the p-value measuring the significance of the association.
@@ -59,122 +46,43 @@ rule liftover_to_hg19:
         hg19_liftover = DATA['hg19_liftover']
     output:
         hg19file = os.path.join(DIRECTORIES['intermediateFiles'], "dsQtlTable_hg19.bed"),
+        posfile = os.path.join(DIRECTORIES['intermediateFiles'], "dsQtlTable_hg19_pos.txt")
     shell:
-        """liftOver {input.dsqtl} {input.hg19_liftover} {output.hg19file} {output.hg19file}.unmapped """
-
+        """
+        liftOver {input.dsqtl} {input.hg19_liftover} {output.hg19file} {output.hg19file}.unmapped ;
+        less {output.hg19file} | cut -f1,3 | sed -e 's:chr::g' | sort | uniq > {output.posfile}
+        """
+        
 rule getRsID:
+    """
+    Get RsID from chrom and pos hg19 info using dbsnp vcf.; select SNV variant class, drop any duplicates
+    Arrange the output in a format accepted by PLINK
+    """
     input:
         dsqtl = rules.liftover_to_hg19.output.hg19file,
         dbsnp150 = DATA['dbsnp150']
     output:
-        tempfile = os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.temp.bed"),
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.withRSid.dat")
+        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.temp.bed")),
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.withRsID.dat"),
+        posfile = os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.RsID.txt")
     run:
         shell(r"""
         less {input.dsqtl} | sed -e 's:chr::g' | intersectBed -a - -b {input.dbsnp150} -wa -wb > {output.tempfile}
         """)
-        d = pandas.read_csv(output.tempfile, sep='\t', header=None, names=['chrom','start','end','effect','pval','chromvcf','pos','snp','ref','alt','qual','filter','info'])
+        d = pandas.read_csv(output.tempfile, sep='\t', header=None, names=['chrom','start','end','effect','P','chromvcf','pos','SNP','ref','alt','qual','filter','info'])
+        # Separate SNPs where the input SNP position matches the RSPOS from the dbsnp info
         d = d[d.apply(lambda x: "RSPOS={val}".format(val=x.end) in x.info, axis=1)]
+
+        # Get SNPs which have more than one rsID, retain the row containing SNV information
         dsub = d[d.duplicated(['chrom','start','end'], keep=False)]
         dsub = dsub[dsub['info'].str.contains("VC=SNV")].drop_duplicates(['chrom','end'])
 
-        d.drop_duplicates(['chrom','start','end'], keep=False)
+        d.drop_duplicates(['chrom','start','end'], keep=False, inplace=True)
         dout = pandas.concat([d, dsub], ignore_index=True)
-        removlist = ['rs573025715', 'rs546625374', 'rs147593563', 'rs548207910', 'rs372406025', 'rs538806926', 'rs531858412']
-        d = d[~ d['snp'].isin(removlist)]
-        d[['chrom','start','end','effect','pval','snp']].to_csv(output.main, sep='\t', index=False)
+        dout[['chrom','start','end','effect','P','SNP']].to_csv(output.main, sep='\t', index=False)
+        dout['SNP'].drop_duplicates().to_csv(output.posfile, index=False)
 
-rule pruneUsingNCIPortal:
-    """
-    1. Prune by LD
-    2. Filter by MAF
-    """
-    input:
-        rules.getRsID.output.main
-    params:
-        resultDir = lambda wildcards: os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.pruneResults{prune_r2}.maf{maf}"),
-        mafThreshold = lambda wildcards: "{maf}",
-        population = PARAMETERS['POPULATION'],
-        r2Threshold = lambda wildcards: "{prune_r2}",
-        sortName = 'pval',
-        script = SCRIPTS['pruningScript']
-    output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.pruned{prune_r2}.maf{maf}.dat")
-    shell:
-        r"""
-        python {params.script} {input} {output} -maf {params.mafThreshold} -p {params.population} -dir {params.resultDir} -s {params.sortName} -r2 {params.r2Threshold} 
-        """
 
-rule setupGREGOR:
-    input:
-        eqtlfile = rules.pruneUsingNCIPortal.output,
-        annotations = expand(DATA['annotations'], cell="GM12878", region = REGIONS),
-    output:
-        snpfile = os.path.join(DIRECTORIES['eqtlIndexDir'], "dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.txt"),
-        bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.txt"),
-        conf = os.path.join(DIRECTORIES['gregorRun'], "enrich.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.conf"),
-    params:
-        script = SCRIPTS['makeConfFile'],
-        population = PARAMETERS['POP_gregor'],
-        gregorR2Threshold = lambda wildcards: "{gregor_r2}",
-        outputdir = lambda wildcards: os.path.join(DIRECTORIES['gregorRun'], "output_dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}"),
-        cores = PARAMETERS['cores']
-    shell:
-        r"""
-        less {input.eqtlfile} | grep -v Allele | awk '{{print "chr"$1":"$3}}' | sort | uniq > {output.snpfile} ;
-        python {params.script} --conffile {output.conf} --snpfile {output.snpfile} --bedfile {output.bedfile} --gregorR2Threshold {params.gregorR2Threshold} --cores {params.cores} --outputdir {params.outputdir} --annotfiles {input.annotations} --population {params.population};
-        """
-        
-rule runGREGOR:
-    input:
-        conf = rules.setupGREGOR.output.conf
-    output:
-        os.path.join(DIRECTORIES['gregorRun'], "output_dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}/index_SNP/index.snp.LD.txt"),
-        os.path.join(DIRECTORIES['gregorRun'], "output_dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}/StatisticSummaryFile.txt")
-    shell:
-        r"""
-        ionice -c2 -n7 GREGOR.pl --conf {input.conf}
-        """
-        
-rule getProxies:
-    """
-    Get r2 proxies - use GREGOR output.
-    """
-    input:
-        os.path.join(DIRECTORIES['gregorRun'], "output_dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}/index_SNP/index.snp.LD.txt")
-    output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "ldbuddiesFromGREGOR_dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
-    params:
-        script = SCRIPTS['proxyFromGREGOR'],
-    shell:
-        r"""
-        python {params.script} {input} {output}
-        """
-
-rule organizeEqtlDF:
-    """
-    Merge proxies with pruned eQTL lead SNPs
-    remove unwanted columns
-    """
-    input:
-        proxyfile = rules.getProxies.output,
-        eqtlfile = rules.pruneUsingNCIPortal.output
-    output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
-    run:
-        eqtlfile = pandas.read_csv(input.eqtlfile[0], sep='\t')
-        eqtlfile.loc[:,'chrom'] = eqtlfile['chrom'].map(lambda x: "chr{chrom}".format(chrom=x))
-        eqtlfile.rename(columns={'end' : 'indexPos'}, inplace=True)
-        
-        proxyfile = pandas.read_csv(input.proxyfile[0], sep='\t', header=None, names=['chrom','proxyStart','proxyEnd','indexPos'])
-        outdf = pandas.merge(proxyfile, eqtlfile, how="right", on=['chrom','indexPos'])
-        outdf.proxyEnd.fillna(outdf.indexPos, inplace=True)
-        outdf.proxyStart.fillna(outdf.indexPos - 1, inplace=True)
-        outdf[['proxyStart','proxyEnd']] = outdf[['proxyStart','proxyEnd']].astype(int)
-        d1 = outdf.groupby(['chrom','indexPos']).size().reset_index(name='totalnumLD')
-        ndf = pandas.merge(outdf, d1, how="left", on=['chrom','indexPos'])
-        ndf.to_csv(output[0], sep='\t', index=False, na_rep="NA")
-        
 def getHeaderList(filename, extendlist):
     with open(filename, 'r') as f:
         l = f.readline().rstrip().split('\t')
@@ -183,25 +91,26 @@ def getHeaderList(filename, extendlist):
     
 rule getHeaderString:
     input:
-        proxyfile = rules.organizeEqtlDF.output
+        proxyfile = rules.mergeWithOriginal.output.main
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
+        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.dsqtl.prune{prune_r2}.maf{maf}.ld{proxy_r2}.dat")
     run:
-        var = '\t'.join(getHeaderList(input.proxyfile[0], ['cell','annotation']))
+        var = '\t'.join(getHeaderList(input.proxyfile, ['cell','annotation']))
         with open(output[0], 'w') as the_file:
             the_file.write("{var}\n".format(var=var))
+
             
 rule intersectAnnotations:
     """
     Intersect annotations with eQTL proxy SNPs
     """
     input:
-        eqtlfile = rules.organizeEqtlDF.output,
+        eqtlfile = rules.mergeWithOriginal.output.main,
         annotations = expand(DATA['annotations'], cell="GM12878", region = REGIONS),
         headerString = rules.getHeaderString.output
     output:
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat"),
-        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat.temp"))
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.dsqtl.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat"),
+        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.dsqtl.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat.temp"))
     shell:
         r"""
         for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.eqtlfile} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done | sort | uniq  > {output.tempout};
@@ -212,7 +121,7 @@ rule plot:
     input:
         rules.intersectAnnotations.output.main
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.dsqtl.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.dsqtl.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.pdf")
     params:
         script = SCRIPTS['plot']
     shell:
