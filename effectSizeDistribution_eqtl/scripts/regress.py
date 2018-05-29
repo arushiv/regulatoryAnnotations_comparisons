@@ -2,6 +2,10 @@ import pandas
 import numpy
 import statsmodels.formula.api as sm
 import argparse
+from patsy import dmatrices
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as s2
+from sklearn import preprocessing
 
 # chrom   proxyStart      proxyEnd        indexPos        gene_id gene_name       tss_distance    ref     alt     snp     maf     pval_nominal    slope   qval    Position        Alleles cell    annotation
 def getOpts():
@@ -31,9 +35,29 @@ def statevar_regress(d):
 def statevar_ld_regress(d):
     d1 = d.groupby(['chrom','indexPos','gene_name','annotation', 'absoluteBeta', 'absoluteDist', 'statevar']).size().reset_index(name='numLD')
     # print(d1)
-    res1 = sm.ols(formula="absoluteBeta ~ absoluteDist + statevar + numLD", data=d1).fit()
-    print(res1.summary())
+    """
+    Normalize absoluteDist and numLD, otherwise the OLS gives warnings:
+    "The condition number is large, 2.48e+05. This might indicate that there are
+    strong multicollinearity or other numerical problems."
+    """
+    x = d1[['absoluteDist','numLD']].values #returns a numpy array
+    min_max_scaler = preprocessing.MinMaxScaler()
+    x_scaled = min_max_scaler.fit_transform(x)
+    nd = pandas.DataFrame(x_scaled, columns=['absoluteDist_norm','numLD_norm'])
+    d2 = pandas.concat([d1, nd], axis=1)
+    
+    res1 = sm.ols(formula="absoluteBeta ~ absoluteDist_norm + statevar + numLD_norm", data=d2).fit()
+    y, X = dmatrices(formula_like="absoluteBeta ~ absoluteDist_norm + statevar + numLD_norm", data=d2, return_type="dataframe")
+    vif = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
+    # print(X)
+    for i in range(X.shape[1]):
+        print(variance_inflation_factor(X.values, i))
 
+    print(res1.summary())
+    # res2 = s2.OLS(y, X).fit()
+    # print("new")
+    # print(res2.summary())
+    
 """ dist + state + num total LD """
 def statevar_totalld_regress(d):
     res1 = sm.ols(formula="absoluteBeta ~ absoluteDist + statevar + totalnumLD", data=d).fit()
@@ -76,9 +100,9 @@ if __name__ == '__main__':
     
     if args.typereg == "intpeaks":
         d = fixForChromStates(d)
-        statevar_regress(d)
+        # statevar_regress(d)
         statevar_ld_regress(d)
-        statevar_totalld_regress(d)
+        # statevar_totalld_regress(d)
         
     elif args.typereg == "allpeaks":
         forAllContigEnhancers(d)
