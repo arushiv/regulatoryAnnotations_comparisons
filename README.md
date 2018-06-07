@@ -25,7 +25,9 @@ The analyses use the following software:
 * bedtools 2.26.0
 * GREGOR 1.2.1
 * GAT 1.3.5
-
+* PLINK 1.9
+* vcftools
+	
 To setup these pre-requisites, use the Anaconda/Miniconda Python3 distribution. The Conda package manager is used to obtain and deploy the defined software packages in the specified versions. These instructions are for the Linux platform
 	
 # Step 1: Install [Anaconda3](https://conda.io/docs/user-guide/install/index.html)
@@ -58,20 +60,22 @@ Now change into the analysis directories and run snakemake using the respective 
 Below are the analysis directories corresponding to each figure:
 ```	
 ├── Fig 2A-D: `summaryStatistics` :: `Snakefile`
+│   └──	Supplementary Fig 1 :: `Snakefile_GAT`		
 ├── Fig 3: `coverageChromatinStates` :: `Snakefile`
 ├── Fig 4A: `enrichment_distanceToNearestGeneTSS` :: `Snakefile_binBylclESI`
-│   ├── Supplementary Fig. S2 :: `Snakefile_allPCgenes`	
-│   ├── Supplementary Fig S4: Automatically runs subworkflow in `lclESI_GTExV7`
-│   └──	Supplementary Fig S5 :: `Snakefile_binBylclESI`
+│   ├── Supplementary Fig 3 :: `Snakefile_allPCgenes`	
+│   ├── Supplementary Fig 5: Automatically runs subworkflow in `lclESI_GTExV7`
+│   └──	Supplementary Fig 6 :: `Snakefile_binBylclESI`
 ├── Fig 4B: `enrichment_eQTL` :: `Snakefile_binByESI`
-│   ├── Supplementary Fig. S3 :: `Snakefile_bulkEnrichment`	
+│   ├── Supplementary Fig 4 :: `Snakefile_bulkEnrichment`	
 │   ├── Automatically runs subworkflow in `lclESI_GTExV7`
-│   └──	Supplementary Fig S6 :: `Snakefile_binByESI`	
-├── Fig 5: `qtl_effectSizeDistribution`
-    ├── Fig 5A :: `Snakefile_eQTLEffect`
-    ├── Supplementary Fig S7 :: `Snakefile_eQTLEffect`	
-    ├── Fig 5B :: `Snakefile_dsQTLEffect`
-    └── Fig 5C :: `Snakefile_allelicBiasEffect`
+│   └──	Supplementary Fig 7 :: `Snakefile_binByESI`	
+├── Fig 5A: `effectSizeDistribution_eqtl`
+│   └── Fig 5A, B, Supplementary Fig 8, 9, table 1 :: `Snakefile_eQTLEffect`
+├── Fig 5B: `effectSizeDistribution_dsqtl`
+│   └── Fig 5C :: `Snakefile_dsQTLEffect`
+├── Fig 5C: `effectSizeDistribution_dsqtl`
+    └── Fig 5D :: `Snakefile_allelicBiasEffect`
 
 ```
 	
