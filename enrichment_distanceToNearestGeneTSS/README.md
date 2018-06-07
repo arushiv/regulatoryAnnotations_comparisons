@@ -1,5 +1,5 @@
 # Use `Snakefile_allPCgenes` to:
-	Calculate cumulative distribution of distance to nearest protein-coding gene TSS for each regulatory annotation (Supplementary Fig 3)
+Calculate cumulative distribution of distance to nearest protein-coding gene TSS for each regulatory annotation (Supplementary Fig 3)
 
 ## Run:
 ```
