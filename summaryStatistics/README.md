@@ -1,4 +1,4 @@
-`Snakefile` to compute:
+# Use `Snakefile` to compute:
 - Number of segments
 - Segment length distribution
 - Percent genome coverage
@@ -20,7 +20,7 @@ $	snakemake -p --latency-wait 400
 	snakemake --dag | dot -Tsvg > workflow.svg
 ```
 
-`Snakefile_GAT` to compute:
+# Use `Snakefile_GAT` to compute:
 - Overlap enrichment between each pair of regulatory annotations.
 
 ## Dry run
