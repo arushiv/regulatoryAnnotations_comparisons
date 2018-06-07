@@ -2,9 +2,8 @@ import pandas
 
 pandas.options.mode.chained_assignment = None
 
-
 """ Read ESI results computed previously """
-dGeneList = pandas.read_csv(snakemake.input.geneList[0], sep='\t', usecols=['Name','Description',snakemake.params.cellName])
+dGeneList = pandas.read_csv(snakemake.input.geneList, sep='\t', usecols=['Name','Description',snakemake.params.cellName])
 dGeneList.columns = ['Name','Description','lclesi']
 
 """ bin by ESI """
