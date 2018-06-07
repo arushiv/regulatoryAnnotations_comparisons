@@ -21,7 +21,7 @@ $	snakemake -p --latency-wait 400
 ```
 
 # Use `Snakefile_GAT` to compute:
-- Overlap enrichment between each pair of regulatory annotations.
+- Overlap enrichment between each pair of regulatory annotations. (Supplementary Fig 1)
 
 ## Dry run
 ```
