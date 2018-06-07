@@ -20,6 +20,7 @@ rule final:
     Workflow to use GTEx RNAseq data to calculate Expression Specificity Index
     """
     input:
+        expand(os.path.join(DIRECTORIES['figures'], "fig.cells_MedianTPMvsBin_heatmap_min{value}.pdf"), value = VALUES),
         expand(os.path.join(DIRECTORIES['figures'], "fig.cells_ESIVsMedianTPM_scatter_min{value}.pdf"), value = VALUES),
         expand(os.path.join(DIRECTORIES['figures'], "fig.LCL_ESIVsMedianTPM_distribution_min{value}.pdf"), value = VALUES),
         expand(os.path.join(DIRECTORIES['intermediateFiles'], "GTEx_v6p.ESI_medianTPM_min{value}.dat"), value = VALUES)
@@ -71,11 +72,12 @@ rule plot:
         rules.make_LCLESI_TPM_dataframe.output
     output:
         fullscatter = os.path.join(DIRECTORIES['figures'], "fig.cells_ESIVsMedianTPM_scatter_min{value}.pdf"),
-        lclDistribution = os.path.join(DIRECTORIES['figures'], "fig.LCL_ESIVsMedianTPM_distribution_min{value}.pdf")
+        lclDistribution = os.path.join(DIRECTORIES['figures'], "fig.LCL_ESIVsMedianTPM_distribution_min{value}.pdf"),
+        heatmap = os.path.join(DIRECTORIES['figures'], "fig.cells_MedianTPMvsBin_heatmap_min{value}.pdf")
     params:
         script = SCRIPTS['plot']
     shell:
         r"""
-        Rscript {params.script} {input} {output.fullscatter} {output.lclDistribution}
+        Rscript {params.script} {input} {output.fullscatter} {output.lclDistribution} {output.heatmap}
         """
         
