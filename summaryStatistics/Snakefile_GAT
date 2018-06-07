@@ -1,0 +1,67 @@
+import os
+import pandas
+import numpy
+
+GAT_DIR = config['DIRECTORIES']['gat_dir']
+GAT_output_figure = os.path.join(config['DIRECTORIES']['figures'], config['DATA']['fig_output'])
+GAT_OUTPUT_DIR = eval(config['DIRECTORIES']['gatResults'])
+COUNTS_DIR = eval(config['DIRECTORIES']['gatCountsIntermediate'])
+LOG_DIR = eval(config['DIRECTORIES']['gatLogs'])
+
+rule all_GAT:
+    """
+    Workflow to compute overlap enrichment between two sets of genomic features
+    """
+    input:
+        GAT_output_figure
+
+rule runGAT:
+    """
+    Run GAT. Segment files are merged by default, if all segment files only have 3 columns, use flag --with-segment-tracks so that the original filename is stored in the output instead of "merged"
+    IMP - do not use --with-segment-tracks flag if segment files contain 4 columns and they don't have to be treated as separate
+    """
+    input:
+        annot = config['DATA']['annotation'],
+        segment = config['DATA']['segment'],
+        workspace = config['DATA']['workspace']
+    output:
+        full = temp(os.path.join(GAT_OUTPUT_DIR, config['DATA']['output']))
+    params:
+        num_samples = config['PARAMETERS']['num_samples'],
+        counts = os.path.join(COUNTS_DIR, config['DATA']['count_output']),
+        countsdir = COUNTS_DIR
+    log:
+        os.path.join(LOG_DIR, config['DATA']['log'])
+    shell:
+        r"""
+        mkdir -p {params.countsdir} ;
+        ionice -c2 -n7 gat-run.py -a {input.annot} -s {input.segment} -w {input.workspace} --stdout {output.full} --log {log} --output-counts-pattern {params.counts}  --num-samples {params.num_samples}
+        """
+
+rule compileResults:
+    input:
+        eval(config['PARAMETERS']['COMPILE_RESULTS'])
+    output:
+        os.path.join(GAT_DIR, "results_GAT.dat")
+    params:
+        script = config['SCRIPTS']['compileResults'],
+        filenameString = config['PARAMETERS']['filenameString'],
+        colnames = config['PARAMETERS']['colnames'], 
+        directory = GAT_OUTPUT_DIR
+    shell:
+        r"""
+        python {params.script} {output} -s {params.filenameString} -d {params.directory} --split -is {params.colnames} 
+        """
+        
+rule plotEnrichment:
+    input:
+        rules.compileResults.output
+    output:
+        GAT_output_figure
+    params:
+        script = config['SCRIPTS']['plot']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
+    
