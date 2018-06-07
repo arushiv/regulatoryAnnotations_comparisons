@@ -19,16 +19,18 @@ PARAMETERS = {
     }
 
 config = {
-    'numberOfSubsamplings' : 100,
-    'threads' : 100
+    'numberOfSubsamplings' : 50,
+    'threads' : 200
 }
+
+newfile = "../data/reference/newTssPClist.bed"
 
 rule final:
     """
     Workflow to compute enrichment for distance to nearest protein coding gene TSS for annotations after binning by LCL ESI 
     """
     input:
-        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_Enrichment.pdf".format(config['numberOfSubsamplings'], config['threads']))
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_EnrichmentCI.pdf".format(config['numberOfSubsamplings'], config['threads']))
         
 rule getGencodeTss:
     """
@@ -36,7 +38,7 @@ rule getGencodeTss:
     """
     input:
         geneList = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
-        gencode_annotation = DATA['gencode_annotation']
+        gencode_annotation = newfile
     output:
         filesByBin = expand(os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin{binNumber}.bed"), binNumber = range(1, (PARAMETERS['bins'] + 1))),
         fileFullGeneSet = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.allLclESIGenes.bed")
@@ -59,7 +61,7 @@ rule getNearestDistance:
         temp(os.path.join(DIRECTORIES['intermediateFiles'], "nearestDistance.{cell}.{region}.{binNumber}.bed"))
     shell:
         r"""
-        grep -v "chrom" {input.filesByBin} | sortBed -i - | bedtools closest -d -a {input.annotations} -b - | awk '{{ print $NF"\t{wildcards.cell}\t{wildcards.region}\t{wildcards.binNumber}" }}' OFS='\t' > {output}
+        grep -v "chrom" {input.filesByBin} | sortBed -i - | bedtools closest -d -a {input.annotations} -b - -t first | awk '{{ print $NF"\t{wildcards.cell}\t{wildcards.region}\t{wildcards.binNumber}" }}' OFS='\t' > {output}
         """
 
 rule merge_nearestDistanceFiles:
@@ -120,7 +122,7 @@ rule plot:
     input:
         rules.computeEnrichment.output
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_Enrichment.pdf".format(config['numberOfSubsamplings'], config['threads']))       
+        os.path.join(DIRECTORIES['figures'], "fig.nearestDistByLclESIBin_subsample{0}_threaded{1}_EnrichmentCI.pdf".format(config['numberOfSubsamplings'], config['threads']))       
     script:
         SCRIPTS['plot']
 
