@@ -10,7 +10,7 @@ import subprocess as sp
 
 def fixFunc(df, bedfile):
     # ndf = df.closest(pybedtools.BedTool(bedfile), d=True).to_dataframe()  # Closest for genes
-    ndf = pybedtools.BedTool(bedfile).closest(df, d=True).to_dataframe()  # Closest for annotations
+    ndf = pybedtools.BedTool(bedfile).closest(df, d=True, t="first").to_dataframe()  # Closest for annotations, report one for ties
     ndf = ndf[ndf.columns[-1:]]  # Retain only last column of the closest distance
     ndf.loc[:,'name'] = bedfile
     return ndf
