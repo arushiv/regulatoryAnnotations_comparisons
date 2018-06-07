@@ -7,7 +7,6 @@ subworkflow getESI:
     snakefile: os.path.join(BASE_PATH, "lclESI_GTExV7/Snakefile")
                                 
 SCRIPTS = {
-    'getGencodeTss' : "scripts/getGencodeTSS_allPCgenes.py",
     'calculateECDF' : "scripts/calculateECDF.py",
     'plot' : "scripts/plot_ECDF.R",
 }
@@ -24,21 +23,6 @@ rule final:
     """
     input:
         os.path.join(DIRECTORIES['figures'], "fig.nearestDist_ECDF1.pdf"),
-
-# rule getGencodeTss:
-#     """
-#     get TSS for genes for which ESI is defined
-#     """
-#     input:
-#         geneList = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
-#         gencode_annotation = DATA['gencode_annotation']
-#     output:
-#         fileFullGeneSet = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.allLclESIGenes.bed")
-#     params:
-#         cellName = PARAMETERS['cellName'],
-#         filenameString = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin")
-#     script:
-#         SCRIPTS['getGencodeTss']
         
 rule getNearestDistance_andECDF:
     """
