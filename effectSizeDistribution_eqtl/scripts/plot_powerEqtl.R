@@ -1,5 +1,4 @@
 library(ggplot2)
-library(stringr)
 library(ggpubr)
 library(gridExtra)
 library(powerEQTL)
@@ -39,7 +38,6 @@ type1 = 0.05
 nTests = 100000
 
 d1$power_100 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=1)
-## d1$power_100 = powerEQTL.SLR(0.5, typeI = 0.05, nTests = 200000, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=1)
 d1$power_200 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 200, verbose=FALSE, mystddev=1)
 d1$power_250 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 250, verbose=FALSE, mystddev=1)
 d1$power_300 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 300, verbose=FALSE, mystddev=1)
