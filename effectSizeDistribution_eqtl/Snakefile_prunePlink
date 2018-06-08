@@ -1,11 +1,9 @@
-import argparse
 import pandas
 
 """
-Workflow for pruning a list od SNPs using P value of association, using 1000g phase 3 vcf. Population codes or Superpopulation codes can be used to subset 1000g samples  
+Workflow for pruning a list od SNPs using P value of association, using 1000g phase 3 vcf. Followed by fetching proxy SNPs, also using 1000g. Population codes or Superpopulation codes can be used to subset 1000g samples  
 Include this workflow as part of other workflow requiring proxies 
-Vcf files first subset by the selected population, MAF 0.01 filter is applied that avoids any duplicates rsID 
-that arise due to very low frequency rare third or more alleles. Also, all indels are removed.
+Vcf files first subset by the selected population. All indels are removed. Also, plink files only contain bialleic SNPs. .
 Pruning is done using --clump flags
 """
 
@@ -13,10 +11,10 @@ rule makeSampleFile:
     input:
         sampleInfo = DATA['vcf_sampleInfo']
     output:
-        samplefile = os.path.join(PARAMETERS['output_directory'], "subsetSamples.txt")
+        samplefile = os.path.join(config['output_directory'], "subsetSamples.txt")
     run:
         d = pandas.read_csv(input.sampleInfo, sep='\t')
-        d = d[d[PARAMETERS['population_type']] == PARAMETERS['population_code']]
+        d = d[d[config['population_type']] == config['population_code']]
         d[['Sample name']].to_csv(output[0], header=False, index=False)
 
 rule subsetVCF:
@@ -25,15 +23,14 @@ rule subsetVCF:
         samplefile = rules.makeSampleFile.output.samplefile,
         posfile = os.path.join(DIRECTORIES['intermediateFiles'], "snplist_to_subset.significantfdr{fdr}.maf{maf}.dat"), #rules.setup_eqtl_for_pruning.output.snplist
     output:
-        vcf = temp(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
-        index = temp(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz.tbi")),
+        vcf = temp(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
+        index = temp(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz.tbi")),
     params:
-        outstring = os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}"),
-        maf = PARAMETERS['1000g_maf'],
+        outstring = os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}"),
     shell:
         r"""
         vcftools --gzvcf {input.snpfile}  --keep {input.samplefile} \
-        --remove-indels --maf {params.maf} \
+        --remove-indels \
         --snps {input.posfile} \
         --out {params.outstring} --recode ;
         bgzip {params.outstring}.recode.vcf
@@ -41,16 +38,19 @@ rule subsetVCF:
         """
 
 rule get_plink_files:
-    """Make plink format input files after filtering 1000g vcf. IMP - vcf files are usually large so designated to be temp """
+    """
+    Make plink format input files after filtering 1000g vcf. IMP - vcf files are usually large so designated to be temp
+    plink map and ped files only contain bi-allelic loci. 
+    """
     input:
-        vcf = expand(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz"), chrom = CHROM),
-        index = expand(os.path.join(PARAMETERS['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz.tbi"), chrom = CHROM)
+        vcf = expand(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz"), chrom = CHROM),
+        index = expand(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz.tbi"), chrom = CHROM)
     output:
-        vcf = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
-        mapfile = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.map")),
-        pedfile = temp(os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.ped")),
+        vcf = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.recode.vcf.gz"),
+        mapfile = temp(os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.map")),
+        pedfile = temp(os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.ped")),
     params:
-        outstring = os.path.join(PARAMETERS['output_directory'], "myfile.significantfdr{fdr}.maf{maf}"),
+        outstring = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}"),
     shell:
         r"""
         vcf-concat {input.vcf} | bgzip -c > {output.vcf} ;
@@ -63,10 +63,10 @@ rule prune_plink:
         pedfile = rules.get_plink_files.output.pedfile,
         inputfile = os.path.join(DIRECTORIES['intermediateFiles'], "forPruning.gtexV7.significantfdr{fdr}.maf{maf}.dat") #rules.setup_eqtl_for_pruning.output.full
     output:
-        clumpedfile = os.path.join(PARAMETERS['output_directory'], "gtexV7.significantfdr{fdr}.maf{maf}.clumped"),
+        clumpedfile = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.clumped"),
     params:
-        outstring = os.path.join(PARAMETERS['output_directory'], "gtexV7.significantfdr{fdr}.maf{maf}"),#rules.get_plink_files.params.outstring,
-        r2 = PARAMETERS['prune_r2'],
+        outstring = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}"),#rules.get_plink_files.params.outstring,
+        r2 = config['prune_r2'],
         p1 = lambda wildcards: wildcards.fdr,
         p2 = lambda wildcards: wildcards.fdr,
     shell:
@@ -76,3 +76,73 @@ rule prune_plink:
         --out {params.outstring}
         """
         
+rule organize_pruned_results:
+    input:
+        pruned = rules.prune_plink.output.clumpedfile,
+        inputfile = rules.prune_plink.input.inputfile
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.significantfdr{fdr}.maf{maf}.dat"),
+        input_for_proxy = temp(os.path.join(DIRECTORIES['intermediateFiles'], "pruned_input_for_proxy.significantfdr{fdr}.maf{maf}.dat")),
+    params:
+        retain = "onlyPlinkOutput" # Only retain plink output clump lead SNPs, don't include triallelic SNPs that didn't get into plink or were missing from 1000g, as they could cause redundancy in later steps. Other option is "alsoMissing" to take all SNPs after subtracting the clumped SNPs, which would retain any missing SNPs from plink input.
+    run:
+        d = pandas.read_csv(input.pruned, delim_whitespace=True)
+        deqtl = pandas.read_csv(input.inputfile, sep='\t')
+        if params.retain == "alsoMissing":
+            snps_to_remove = pandas.DataFrame(d[d['SP2'] != "NONE"]['SP2'].str.replace('\(1\)', '').str.split(',').tolist()).stack().reset_index().loc[:,0].tolist() 
+            dout = deqtl[~ deqtl['SNP'].isin(snps_to_remove)]
+        elif params.retain == "onlyPlinkOutput":
+            d.rename(columns={'CHR':'chrom','BP':'pos'}, inplace=True)
+            d.loc[:,'chrom'] = d['chrom'].astype(str)
+            dout = pandas.merge(deqtl, d, how="inner", on=['chrom','pos'])
+        dout.to_csv(output.main, sep='\t', index=False)
+        dout.loc[:,'chrom'] = dout['chrom'].str.replace('chr','')
+        dout[['chrom','pos']].to_csv(output.input_for_proxy, header=False, index=False, sep='\t')
+        
+
+rule setup_vcfTools:
+    input:
+        snpfile = DATA['1000g'],
+        samplefile = rules.makeSampleFile.output.samplefile,
+        posfile = rules.organize_pruned_results.output.input_for_proxy,
+    output:
+        os.path.join(config['output_directory'], "pruned.significantfdr{fdr}.maf{maf}.chr{chrom}.ld{proxy_r2}.list.geno.ld")
+    params:
+        outstring = os.path.join(config['output_directory'], "pruned.significantfdr{fdr}.maf{maf}.chr{chrom}.ld{proxy_r2}"),
+        ldwindow = config['ldwindow'],
+    shell:
+        r"""            
+        vcftools --gzvcf {input.snpfile}  --keep {input.samplefile}  --remove-indels  --geno-r2-positions {input.posfile} \
+        --ld-window-bp {params.ldwindow} --min-r2 {wildcards.proxy_r2}  --out {params.outstring}
+        """
+        
+rule mergeWithOriginal:
+    input:
+        proxies = expand(os.path.join(config['output_directory'], "pruned.significantfdr{{fdr}}.maf{{maf}}.chr{chrom}.ld{{proxy_r2}}.list.geno.ld"), chrom=CHROM),
+        main = rules.organize_pruned_results.output.main,
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.ld{proxy_r2}.dat"),
+    run:
+        dproxy = pandas.concat([pandas.read_csv(filename, sep='\t', usecols=['CHR1', 'POS1', 'POS2']) for filename in input.proxies], ignore_index=True)
+        dproxy.rename(columns={'CHR1':'chrom', 'POS1':'indexPos', 'POS2':'proxyPos'}, inplace=True)
+        dproxy.loc[:,'chrom'] = dproxy['chrom'].map(lambda x: "chr{x}".format(x=x))
+        print(dproxy.head())
+        print(dproxy.info())
+        dmain = pandas.read_csv(input.main, sep='\t')
+        dmain.rename(columns={'pos':'indexPos'}, inplace=True)
+        dmain.loc[:,'chrom'] = dmain['chrom'].map(lambda x: "chr{x}".format(x=x))
+    
+        print(dmain.info())
+        ndf = dmain.copy()
+        ndf.loc[:,'proxyPos'] = ndf['indexPos']
+
+
+        df = pandas.merge(dmain, dproxy, how="inner", on=['chrom','indexPos'])
+        print(df.head())
+        df = pandas.concat([ndf, df]).drop_duplicates()
+        df.loc[:,'proxyStart'] = df['proxyPos'] - 1
+        df.loc[:,'proxyStart'] = df['proxyStart'].astype(int)
+        df.loc[:,'proxyPos'] = df['proxyPos'].astype(int)
+        df.loc[:,'indexPos'] = df['indexPos'].astype(int)
+        df.rename(columns={'SNP_x':'SNP','P_x':'P'}, inplace=True)
+        df[['chrom','proxyStart','proxyPos','indexPos', 'gene_id', 'gene_name', 'tss_distance', 'SNP', 'maf', 'pval_nominal', 'slope', 'P']].sort_values(by=['chrom','indexPos']).to_csv(output.main, sep='\t', index=False, na_rep="NA")
