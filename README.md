@@ -26,7 +26,7 @@ The analyses use the following software:
 * GREGOR 1.2.1
 * GAT 1.3.5
 * PLINK 1.9
-* vcftools
+* vcftools 1.15
 	
 To setup these pre-requisites, use the Anaconda/Miniconda Python3 distribution. The Conda package manager is used to obtain and deploy the defined software packages in the specified versions. These instructions are for the Linux platform
 	
@@ -38,7 +38,7 @@ $ bash Anaconda3-5.0.1-Linux-x86_64.sh
 ```
 Answer yes to the user agreement; go with the default installation path or specify your own. Answer yes to prepend the install location to your PATH.
 
-Required for analyses computing enrichment of eQTL and GWAS in regulatory annotations, please install [GREGOR](https://genome.sph.umich.edu/wiki/GREGOR) manually.
+Required for analyses computing enrichment of eQTL and GWAS in regulatory annotations, please install [GREGOR](https://genome.sph.umich.edu/wiki/GREGOR) manually. Edit the path to the GREGOR.pl script file in `Snakefile_config`
 
 # Step 2: Prepare analysis directory
 Create a new directory and change into it.
