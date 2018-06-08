@@ -18,6 +18,7 @@ LINKS = {
     'dbsnp150' : "ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606_b150_GRCh37p13/VCF/common_all_20170710.vcf.gz",
     '1000g' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
     '1000g_index' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
+    'vcf_sampleInfo' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/igsr.tsv.gz"
 }
 
 DATA = {
@@ -37,7 +38,7 @@ DATA = {
     'gm_dsp_expected_deviation' : os.path.join(BASE_PATH,  "data/qtlEffects/GM12878.post_mpileup.err.gz"),
     '1000g' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
     '1000g_index' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
-    'vcf_sampleInfo' : os.path.join(BASE_PATH,  "data/1000g/igsr_3990samples_allPopulations.tsv"),
+    'vcf_sampleInfo' : os.path.join(BASE_PATH,  "data/1000g/igsr.tsv.gz"),
 }
 
 DIRECTORIES = {
@@ -53,17 +54,19 @@ CELLS = ['GM12878','H1','HepG2','K562']
 CHROMATINSTATES = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
 CHROM = range(1, 23)
 
-rule all:
-    input:
-        os.path.join(BASE_PATH,  "data/chromatinStates/GM12878.1_Active_TSS.bed")
-    
+   
 rule download_annotations:
+    """Download and gunzip because GREGOR requires unzipped files later"""
     output:
         protected(DATA['annotations'])
     params:
-        link = LINKS['annotations']
+        link = LINKS['annotations'],
+        outname = os.path.join(BASE_PATH, "data/annotations/{cell}.{region}.annotations.bed.gz")
     shell:
-        "wget {params.link} -O {output}"
+        """
+        wget {params.link} -O {params.outname} ;
+        gunzip {params.outname}
+        """
 
 rule download_chromatinStates:
     output:
@@ -81,7 +84,6 @@ rule download_chromatinStates:
             output_file_name = os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed".format(cell=wildcards.cell, chromatinState=chromatinState_name))
             group[['chrom','start','end']].to_csv(output_file_name, sep='\t', header=False, index=False)
         
-
 rule download_workspace:
     output:
         DATA['workspace']
@@ -111,7 +113,7 @@ rule download_gtexExpression:
         expressionLink = LINKS['gtex_expression'],
         eqtlLink = LINKS['gtex_eqtl']
     shell:
-        r"""
+        """
         wget {params.expressionLink} -O {output.expression} ;
         wget {params.eqtlLink} -O {output.eqtl}
         """
@@ -120,15 +122,34 @@ rule download_1000g:
     output:
         vcf = DATA['1000g'],
         index = DATA['1000g_index']
+        vcf_sampleInfo = DATA['vcf_sampleInfo']
     params:
         vcfLink = LINKS['1000g'],
-        indexLink = LINKS['1000g_index']
+        indexLink = LINKS['1000g_index'],
+        vcf_sampleInfo = LINKS['vcf_sampleInfo']
     shell:
-        r"""
+        """
         wget {params.vcfLink} -O {output.vcf} ;
-        wget {params.indexLink} -O {output.index}
+        wget {params.indexLink} -O {output.index} ;
+        wget {params.vcf_sampleInfo} -O {output.vcf_sampleInfo}
         """
 
+rule download_eqtl_and_expression:
+    output:
+        DATA['gtex_eqtl']
+    params:
+        link = LINKS['gtex_eqtl']
+    shell:
+        """wget {params.link} -O {output} """
+        
+rule download_gtexExpression:
+    output:
+        DATA['gtex_expression']
+    params:
+        link = LINKS['gtex_expression']
+    shell:
+        """wget {params.link} -O {output}"""
+        
 rule download_dsqtl:
     output:
         dsqtl = DATA['dsqtl'],
@@ -137,7 +158,7 @@ rule download_dsqtl:
         link_dsqtl = LINKS['dsqtl'],
         link_hg19_liftover = LINKS['hg19_liftover']
     shell:
-        r"""
+        """
         wget {params.link_dsqtl} -O {output.dsqtl}
         wget {params.link_hg19_liftover} -O {output.hg19_liftover}
         """
@@ -148,7 +169,7 @@ rule download_dbsnp150:
     params:
         link = LINKS['dbsnp150']
     shell:
-        r"""  wget {params.link} -O {output} """
+        """  wget {params.link} -O {output} """
     
 rule download_gmAllelicBias:
     output:
@@ -158,7 +179,7 @@ rule download_gmAllelicBias:
         gm_allelic_bias = LINKS['gm_allelic_bias'],
         gm_expected_deviation = LINKS['gm_expected_deviation']
     shell:
-        r"""
+        """
         wget {params.gm_allelic_bias} -O {output.gm_allelic_bias} ;
         wget {params.gm_expected_deviation} -O {output.gm_expected_deviation} ;
         """
