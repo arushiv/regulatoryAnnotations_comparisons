@@ -4,16 +4,24 @@ channels:
   - r
   - defaults
 dependencies:
-  - bedtools=v2.26.0
-  - r=3.3.3
+  - snakemake=5.1.4
+  - bedtools=2.26.0
+  - r=3.3.2
   - python=3.6.3
-  - snakemake=4.2.0
   - r-gridExtra=2.2.1
   - r-reshape2=1.4.2
-  - r-ggplot2_2.2.1
+  - r-ggplot2=2.2.1
   - r-scales=0.5.0
   - r-plyr=1.8.4
+  - r-ggpubr=0.1.6
+  - r-dplyr=0.7.4
+  - r-readr=1.1.1
+  - r-tidyr=0.8.0
+  - r-Hmisc=4.0.3
+  - r-RColorBrewer=1.1.2
+  - r-forcats=0.2.0
   - gat=1.3.5
   - pandas=0.20.3
   - vcftools=0.1.15
-  - plink=1.07
+  - plink
+  - pybedtools=0.7.10
