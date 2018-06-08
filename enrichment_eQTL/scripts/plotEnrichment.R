@@ -1,5 +1,5 @@
 library(ggplot2)
-library(stringr)
+
 
 args <- commandArgs(TRUE)
 d <- read.table(gzfile(args[1]), header=T, sep='\t')
