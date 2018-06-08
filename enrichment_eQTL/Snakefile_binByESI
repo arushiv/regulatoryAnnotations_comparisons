@@ -17,7 +17,6 @@ DIRECTORIES.update({
 SCRIPTS = {
     'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
     'binByESI' : "scripts/binEgenesByESI.py",
-    'binByESI_mafFilt' : "scripts/binMafFiltEgenesByESI.py",
     'makeConfFile' : "scripts/gregor_makeConf.py",
     'plotEnrich' : "scripts/plotEnrichment.R",
     'calculateCorrelation' : "scripts/correlation.R",
