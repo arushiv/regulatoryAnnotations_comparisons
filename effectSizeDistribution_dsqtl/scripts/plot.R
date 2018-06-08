@@ -1,5 +1,4 @@
 library(ggplot2)
-library(stringr)
 library(ggpubr)
 library(gridExtra)
 library(readr)
@@ -84,7 +83,6 @@ makeRaincloud <- function(d){
 
 }
 
-## d2 <- d[!duplicated(d[c("chrom","indexPos","snp","annotation")]),]   # count SNP (index or proxy) only once for each annotation
 d2 <- d[!duplicated(d[c("chrom","SNP","annotation")]),]   # count SNP (index or proxy) only once for each annotation
 
 d2$absoluteEffect <- abs(d2$slope)
