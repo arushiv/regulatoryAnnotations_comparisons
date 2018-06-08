@@ -1,10 +1,10 @@
 import os
 import pandas
+import numpy
 
 include: "../Snakefile_config"
 include: "Snakefile_prunePlink"
 
-# include: "Snakefile_getProxies"
 DIRECTORIES.update({
     'regression' : "regression",
     'eqtlIndexDir' : "gregorRun/index_snpFiles",
@@ -16,8 +16,9 @@ SCRIPTS = {
     'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
     'makeConfFile' : "scripts/gregor_makeConf.py",
     'proxyFromGREGOR' : "scripts/gregorOutputCompileLdSnps.py",
-    'plot' : "scripts/plot.R",
-    'regression' : "scripts/regress.py"
+    'plot_raincloud' : "scripts/raincloud.R",
+    'regression' : "scripts/regress.py",
+    'powerCalc' : "scripts/plot_powerEqtl.R"
 }
 
 CHROM = list(range(1, 23))
@@ -29,14 +30,19 @@ rule final:
     2. Filter by MAF
     3. Get r2>0.99 buddies
     4. Intersect with annotations and plot
+    5. Also plot effect size vs MAF 
+    6. Perform power calculations
+    7. Perform regression
     """
     input:
-        expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
-        expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
+        effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
+        effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
                fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
-        expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
-               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2'])
-        
+        regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
+
+    
 rule formatEqtlFile:
     """Select by FDR threshold, retain 1 assocaiation per SNP """
     input:
@@ -51,7 +57,9 @@ rule formatEqtlFile:
         d.drop_duplicates(['SNP'], inplace=True) # if SNP associated with 2 or more genes, keep the stronger association
         d.to_csv(output.full, sep='\t', index=False)
 
+
 rule plotEffectVsMAF:
+    "Plot effect vs MAF"
     input:
         rules.formatEqtlFile.output
     output:
@@ -96,24 +104,24 @@ rule getHeaderString:
     input:
         proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"),
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
+        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.dat")
     run:
         var = '\t'.join(getHeaderList(input.proxyfile, ['cell','annotation']))
         with open(output[0], 'w') as the_file:
             the_file.write("{var}\n".format(var=var))
-            
+
 
 rule intersectAnnotations:
     """
     Intersect annotations with eQTL proxy SNPs
     """
     input:
-        eqtlfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"),
+        eqtlfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.ld{proxy_r2}.dat"),
         annotations = expand(DATA['annotations'], cell="GM12878", region = REGIONS),
         headerString = rules.getHeaderString.output
     output:
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat"),
-        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.annotations.dat.temp"))
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat"),
+        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "GM12878.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat.temp"))
     shell:
         r"""
         for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.eqtlfile} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done | sort | uniq  > {output.tempout};
@@ -124,9 +132,9 @@ rule plot:
     input:
         rules.intersectAnnotations.output.main
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.pdf")
     params:
-        script = SCRIPTS['plot']
+        script = SCRIPTS['plot_raincloud']
     shell:
         r""" 
         Rscript {params.script} {input} {output}
@@ -136,7 +144,7 @@ rule regress:
     input:
         rules.intersectAnnotations.output.main
     output:
-        os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+        os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.ATACPeaksChromStates.dat"),
     params:
         script = SCRIPTS['regression']
     shell:
@@ -144,52 +152,36 @@ rule regress:
         python {params.script} --inputfile {input} --typereg intpeaks > {output};
         """
                                                                     
-# rule setup_powerCalc:
-#     input:
-#         expand(rules.intersectAnnotations.output.main, fdr=0.1, prune_r2=0.8, maf=0.2, gregor_r2=0.99)
-#     output:
-#         os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
-#     run:
-#         d = pandas.read_csv(input[0], sep="\t")
-#         d.drop_duplicates(['chrom','snp','annotation'], inplace=True)
-#         d.loc[:,'absoluteEffect'] = abs(d['slope'])
-#         nd = d.groupby('annotation')['absoluteBeta'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
-#         nd.to_csv(output[0], sep='\t', index=False)
-        
-# rule plot_power:
-#     input:
-#         rules.setup_powerCalc.output
-#     output:
-#         os.path.join(DIRECTORIES['figures'], "GM12878.powerCalc.pdf")
-#     params:
-#         script = SCRIPTS['powerCalc']
-#     shell:
-#         r"""
-#         Rscript {params.script} {input} {output}
-#         """
+rule setup_powerCalc:
+    input:
+        expand(rules.intersectAnnotations.output.main, fdr=0.1, prune_r2=0.8, maf=0.2, proxy_r2=0.99)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
+    run:
+        d = pandas.read_csv(input[0], sep="\t")
+        print(d)
+        d.drop_duplicates(['chrom','snp','annotation'], inplace=True)
+        d.loc[:,'absoluteEffect'] = abs(d['slope'])
+        # nd = d.groupby('annotation')['absoluteEffect'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
+        # nd.to_csv(output[0], sep='\t', index=False)
+        nd = d.groupby('annotation')['absoluteEffect'].describe(percentiles=numpy.arange(0.1, 0.91, 0.01)).reset_index()
+        for col in nd.columns:
+            if col[0].isdigit():
+                newcol = round(float(col.replace("%","")),2)
+                nd.rename(columns={col:newcol}, inplace=True)
+        nd.to_csv(output[0], sep='\t', index=False)
+
+
+rule plot_power:
+    input:
+        rules.setup_powerCalc.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
+    params:
+        script = SCRIPTS['powerCalc']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
                                                                                                                                                         
 
-                                                                                                           
-# rule organizeEqtlDF:
-#     """
-#     Merge proxies with pruned eQTL lead SNPs
-#     remove unwanted columns
-#     """
-#     input:
-#         proxyfile = rules.getProxies.output,
-#         eqtlfile = rules.pruneUsingNCIPortal.output
-#     output:
-#         os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.dat")
-#     run:
-#         eqtlfile = pandas.read_csv(input.eqtlfile[0], sep='\t')
-#         eqtlfile.loc[:,'chrom'] = eqtlfile['chrom'].map(lambda x: "chr{chrom}".format(chrom=x))
-#         eqtlfile.rename(columns={'pos' : 'indexPos'}, inplace=True)
-        
-#         proxyfile = pandas.read_csv(input.proxyfile[0], sep='\t', header=None, names=['chrom','proxyStart','proxyEnd','indexPos'])
-#         outdf = pandas.merge(proxyfile, eqtlfile, how="right", on=['chrom','indexPos'])
-#         outdf.proxyEnd.fillna(outdf.indexPos, inplace=True)
-#         outdf.proxyStart.fillna(outdf.indexPos - 1, inplace=True)
-#         outdf[['proxyStart','proxyEnd']] = outdf[['proxyStart','proxyEnd']].astype(int)
-#         d1 = outdf.groupby(['chrom','indexPos','gene_name']).size().reset_index(name='totalnumLD')
-#         ndf = pandas.merge(outdf, d1, how="left", on=['chrom','indexPos','gene_name'])
-#         ndf.to_csv(output[0], sep='\t', index=False, na_rep="NA")
