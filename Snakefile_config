@@ -105,36 +105,30 @@ rule download_gencodeAnnotation:
         zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.pc_gene_list}
         """)
         
-rule download_gtexExpression:
-    output:
-        expression = DATA['gtex_expression'],
-        eqtl = DATA['gtex_eqtl'],
-    params:
-        expressionLink = LINKS['gtex_expression'],
-        eqtlLink = LINKS['gtex_eqtl']
-    shell:
-        """
-        wget {params.expressionLink} -O {output.expression} ;
-        wget {params.eqtlLink} -O {output.eqtl}
-        """
-
 rule download_1000g:
     output:
         vcf = DATA['1000g'],
-        index = DATA['1000g_index']
-        vcf_sampleInfo = DATA['vcf_sampleInfo']
+        index = DATA['1000g_index'],        
     params:
         vcfLink = LINKS['1000g'],
         indexLink = LINKS['1000g_index'],
-        vcf_sampleInfo = LINKS['vcf_sampleInfo']
     shell:
         """
         wget {params.vcfLink} -O {output.vcf} ;
-        wget {params.indexLink} -O {output.index} ;
-        wget {params.vcf_sampleInfo} -O {output.vcf_sampleInfo}
+        wget {params.indexLink} -O {output.index} ;       
         """
 
-rule download_eqtl_and_expression:
+rule download_100g_sampleInfo:
+    output:
+        vcf_sampleInfo = DATA['vcf_sampleInfo']
+    params:
+        vcf_sampleInfo = LINKS['vcf_sampleInfo']
+    shell:
+        """
+        wget {params.vcf_sampleInfo} -O {output.vcf_sampleInfo}
+        """
+        
+rule download_gtexEqtl:
     output:
         DATA['gtex_eqtl']
     params:
