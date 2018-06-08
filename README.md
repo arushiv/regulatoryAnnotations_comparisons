@@ -3,7 +3,6 @@ This repository contains code to reproduce results of the manuscript:
 
 Each directory contains code for analyses specific to different figures of the paper. Everything is run using [snakemake](http://snakemake.readthedocs.io/en/latest/). The analysis directories follow this general pattern:
 ```	
-├── .gitignore
 ├── README.md
 ├── config.yaml : Cluster config specifications (if analysis is recommended to be run on a cluster)
 ├── scripts : Scripts for analyses
