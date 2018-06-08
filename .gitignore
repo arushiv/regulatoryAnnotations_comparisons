@@ -2,4 +2,6 @@
 data/
 figures/
 intermediateFiles/
+logs/
 .snakemake/
+.ipynb_checkpoints/
