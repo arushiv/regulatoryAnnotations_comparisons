@@ -15,13 +15,12 @@ DIRECTORIES.update({
 })    
 
 SCRIPTS = {
-    'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
     'binByESI' : "scripts/binEgenesByESI.py",
     'makeConfFile' : "scripts/gregor_makeConf.py",
     'plotEnrich' : "scripts/plotEnrichment.R",
     'calculateCorrelation' : "scripts/correlation.R",
     'plotCorrelation' : "scripts/plotCorrelation.R",
-    'compileGregorResult' : "scripts/makeDataFrame_gregor.py"
+    'compile_df' : "scripts/makeDataFrame_gregor.py"
 }
 
 PARAMETERS = {
@@ -97,7 +96,7 @@ rule compileGREGORdataframe:
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.binned.dat")
     params:
-        script = "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py",
+        script = SCRIPTS['compile_df'],
         header = "eqtl fdr0 fdr prune pruner2 maf bin cell annotation feature overlap expected_overlap pval", 
         nameFieldSeparator = ".",
         jobFieldSeparator = ".",
