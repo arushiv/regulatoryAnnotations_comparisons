@@ -1,0 +1,119 @@
+import pandas
+
+"""
+Workflow for pruning a list od SNPs using P value of association, using 1000g phase 3 vcf. Followed by fetching proxy SNPs, also using 1000g. Population codes or Superpopulation codes can be used to subset 1000g samples  
+Include this workflow as part of other workflow requiring proxies 
+Vcf files first subset by the selected population. All indels are removed. Also, plink files only contain bialleic SNPs. .
+Pruning is done using --clump flags
+"""
+rule setup_eqtl_for_pruning:
+    """Select by FDR threshold, retain 1 assocaiation per SNP 
+    Filter by MAF and setup file header names for plink clump input
+    """
+    input:
+        eqtlfile = DATA['gtex_eqtl']
+    output:
+        full = os.path.join(DIRECTORIES['intermediateFiles'], "forPruning.gtexV7.significantfdr{fdr}.maf{maf}.dat"),
+        snplist = os.path.join(DIRECTORIES['intermediateFiles'], "snplist_to_subset.significantfdr{fdr}.maf{maf}.dat"),
+    run:
+        d = pandas.read_csv(input[0], sep='\t', usecols=['gene_id', 'gene_name', 'tss_distance', 'chr', 'pos', 'ref', 'alt', 'rs_id_dbSNP147_GRCh37p13', 'maf', 'pval_nominal', 'slope', 'qval'])
+        d.rename(columns={'rs_id_dbSNP147_GRCh37p13' : 'SNP', 'chr' : 'chrom'}, inplace=True)
+        d = d[d['qval'] <= float(wildcards.fdr)]
+        d.sort_values(['qval'], inplace=True)
+        d.drop_duplicates(['SNP'], inplace=True) # if SNP associated with 2 or more genes, keep the stronger association
+        d.rename(columns={'qval' : 'P'}, inplace=True) # plink requires p val column to select one SNP per clump
+        d = d[d['maf'] >= float(wildcards.maf)]
+        d.to_csv(output.full, sep='\t', index=False)
+        d[['SNP']].to_csv(output.snplist, header=False, index=False)
+        
+rule makeSampleFile:
+    input:
+        sampleInfo = DATA['vcf_sampleInfo']
+    output:
+        samplefile = os.path.join(config['output_directory'], "subsetSamples.txt")
+    run:
+        d = pandas.read_csv(input.sampleInfo, sep='\t')
+        d = d[d[config['population_type']] == config['population_code']]
+        d[['Sample name']].to_csv(output[0], header=False, index=False)
+
+rule subsetVCF:
+    input:
+        snpfile = DATA['1000g'],
+        samplefile = rules.makeSampleFile.output.samplefile,
+        posfile = rules.setup_eqtl_for_pruning.output.snplist
+    output:
+        vcf = temp(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz")),
+        index = temp(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}.recode.vcf.gz.tbi")),
+    params:
+        outstring = os.path.join(config['output_directory'], "chr{chrom}.significantfdr{fdr}.maf{maf}"),
+    shell:
+        r"""
+        vcftools --gzvcf {input.snpfile}  --keep {input.samplefile} \
+        --remove-indels \
+        --snps {input.posfile} \
+        --out {params.outstring} --recode ;
+        bgzip {params.outstring}.recode.vcf
+        tabix {output.vcf}
+        """
+
+rule get_plink_files:
+    """
+    Make plink format input files after filtering 1000g vcf. IMP - vcf files are usually large so designated to be temp
+    plink map and ped files only contain bi-allelic loci. 
+    """
+    input:
+        vcf = expand(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz"), chrom = CHROM),
+        index = expand(os.path.join(config['output_directory'], "chr{chrom}.significantfdr{{fdr}}.maf{{maf}}.recode.vcf.gz.tbi"), chrom = CHROM)
+    output:
+        vcf = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.recode.vcf.gz"),
+        mapfile = temp(os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.map")),
+        pedfile = temp(os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.ped")),
+    params:
+        outstring = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}"),
+    shell:
+        r"""
+        vcf-concat {input.vcf} | bgzip -c > {output.vcf} ;
+        vcftools --gzvcf {output.vcf} --plink --out {params.outstring}
+        """
+
+rule prune_plink:
+    input:
+        mapfile = rules.get_plink_files.output.mapfile,
+        pedfile = rules.get_plink_files.output.pedfile,
+        inputfile = os.path.join(DIRECTORIES['intermediateFiles'], "forPruning.gtexV7.significantfdr{fdr}.maf{maf}.dat") #rules.setup_eqtl_for_pruning.output.full
+    output:
+        clumpedfile = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.prune{r2}.clumped"),
+    params:
+        instring = rules.get_plink_files.params.outstring,
+        outstring = os.path.join(config['output_directory'], "myfile.significantfdr{fdr}.maf{maf}.prune{r2}"),#rules.get_plink_files.params.outstring,
+        r2 = lambda wildcards: wildcards.r2,
+        p1 = lambda wildcards: wildcards.fdr,
+        p2 = lambda wildcards: wildcards.fdr,
+    shell:
+        r"""
+        /lab/sw/modules/plink/1.9/bin/plink --file {params.instring} \
+        --clump {input.inputfile} --clump-r2 {params.r2} --clump-p1 {params.p1} --clump-p2 {params.p2} \
+        --out {params.outstring}
+        """
+        
+rule organize_pruned_results:
+    input:
+        pruned = rules.prune_plink.output.clumpedfile,
+        inputfile = rules.prune_plink.input.inputfile
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "GTExv7.{fdr}.prune{r2}.maf{maf}.dat"),
+    params:
+        retain = "onlyPlinkOutput" # Only retain plink output clump lead SNPs, don't include triallelic SNPs that didn't get into plink or were missing from 1000g, as they could cause redundancy in later steps. Other option is "alsoMissing" to take all SNPs after subtracting the clumped SNPs, which would retain any missing SNPs from plink input.
+    run:
+        d = pandas.read_csv(input.pruned, delim_whitespace=True)
+        deqtl = pandas.read_csv(input.inputfile, sep='\t')
+        if params.retain == "alsoMissing":
+            snps_to_remove = pandas.DataFrame(d[d['SP2'] != "NONE"]['SP2'].str.replace('\(1\)', '').str.split(',').tolist()).stack().reset_index().loc[:,0].tolist() 
+            dout = deqtl[~ deqtl['SNP'].isin(snps_to_remove)]
+        elif params.retain == "onlyPlinkOutput":
+            d.rename(columns={'CHR':'chrom','BP':'pos'}, inplace=True)
+            d.loc[:,'chrom'] = d['chrom'].astype(str)
+            dout = pandas.merge(deqtl, d, how="inner", on=['chrom','pos'])
+        dout.to_csv(output.main, sep='\t', index=False)
+        
+

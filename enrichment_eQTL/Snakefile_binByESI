@@ -2,11 +2,13 @@ import os
 import pandas
 
 include: "../Snakefile_config"
+include: "Snakefile_prunePlink"
 
 subworkflow getESI:
     workdir: os.path.join(BASE_PATH, "lclESI_GTExV7")
     snakefile: os.path.join(BASE_PATH, "lclESI_GTExV7/Snakefile")
 
+    
 DIRECTORIES.update({
     'eqtlIndexDir' : "gregorRun/index_snpFiles",
     'gregorRun' : "gregorRun"
@@ -41,44 +43,8 @@ rule final:
     Workflow to compute enrichment for distance to nearest protein coding gene TSS for annotations after binning by LCL ESI 
     """
     input:
-        os.path.join(DIRECTORIES['figures'], "fig.enrichment_eqtlByLclESIBin.pdf"),
-        os.path.join(DIRECTORIES['figures'], "fig.enrichmentCorrelationWithLclESIBin.pdf")
-
-rule formatEqtlFile:
-    input:
-        eqtlfile = DATA['gtex_eqtl']
-    output:
-        full = os.path.join(DIRECTORIES['data'], "gtexV7.significant{fdr}.dat".format(fdr=PARAMETERS['fdr'])),
-    params:
-        fdr = PARAMETERS['fdr']
-    run:
-        d = pandas.read_csv(input[0], sep='\t', usecols=['gene_id', 'gene_name', 'tss_distance', 'chr', 'pos', 'ref', 'alt', 'rs_id_dbSNP147_GRCh37p13', 'maf', 'pval_nominal', 'slope', 'qval'])
-        d.rename(columns={'rs_id_dbSNP147_GRCh37p13' : 'snp', 'chr' : 'chrom'}, inplace=True)
-        d = d[d['qval'] <= params.fdr]
-        d = d[~ d['snp'].isin(["rs397795305", "rs56052240","rs397791038","rs56708048"])] # Raises an error on the NCI browser
-        d.sort_values(['qval'], inplace=True)
-        d.drop_duplicates(['snp'], inplace=True)
-        d.to_csv(output.full, sep='\t', index=False)
-        
-rule pruneUsingNCIPortal:
-    """
-    1. Prune by LD r2 < 0.8 
-    """
-    input:
-        rules.formatEqtlFile.output
-    params:
-        resultDir = os.path.join(DIRECTORIES['intermediateFiles'], "pruneResults_r2{r2}_maf{maf}".format(r2=PARAMETERS['pruneR2Threshold'], maf=PARAMETERS['mafThreshold'])),
-        mafThreshold = PARAMETERS['mafThreshold'],
-        population = PARAMETERS['POPULATION'],
-        r2Threshold = PARAMETERS['pruneR2Threshold'],
-        sortName = 'qval',
-        script = SCRIPTS['pruningScript']
-    output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "{base}.dat".format(base=base))
-    shell:
-        r"""
-        python {params.script} {input} {output} -maf {params.mafThreshold} -p {params.population} -dir {params.resultDir} -s {params.sortName} -r2 {params.r2Threshold} 
-        """
+        expand(os.path.join(DIRECTORIES['figures'], "fig.enrichment_eqtlByLclESIBin.{base}.pdf"), base=base),
+        expand(os.path.join(DIRECTORIES['figures'], "fig.enrichmentCorrelationWithLclESIBin.{base}.pdf"), base=base)
         
 rule mergeESIanEqtl:
     """
@@ -86,28 +52,28 @@ rule mergeESIanEqtl:
     """
     input:
         esi = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
-        eqtl = rules.pruneUsingNCIPortal.output
+        eqtl = os.path.join(DIRECTORIES["intermediateFiles"], "{base}.dat") #rules.pruneUsingNCIPortal.output
     output:
-        fullfile = os.path.join(DIRECTORIES['intermediateFiles'], "{base}.geneESI.dat".format(base=base)),
-        binFiles = expand(os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.lclESIbin{binNumber}.txt"), base = base, binNumber = range(1, PARAMETERS['bins']+1))
+        fullfile = os.path.join(DIRECTORIES['intermediateFiles'], "{base}.geneESI.dat"),
+        binFiles = expand(os.path.join(DIRECTORIES['eqtlIndexDir'], "{{base}}.lclESIbin{binNumber}.txt"), binNumber = range(1, PARAMETERS['bins']+1))
     params:
         cellName = PARAMETERS['cellName'],
         bins = PARAMETERS['bins'],
-        namestring = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.lclESIbin".format(base=base))
+        namestring = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.lclESIbin")
     script:
         SCRIPTS['binByESI']
 
 rule setupGREGOR:
     input:
-        eqtlfile = expand(os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.lclESIbin{{binNumber}}.txt"), base=base),
+        eqtlfile = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.lclESIbin{binNumber}.txt"),
         annotations = expand(DATA['annotations'], cell=CELLS, region=REGIONS)
     output:
-        bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.lclESIbin{binNumber}.txt"),
-        conf = expand(os.path.join(DIRECTORIES['gregorRun'], "enrich.{base}.lclESIbin{{binNumber}}.conf"), base=base),
+        bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.{base}.lclESIbin{binNumber}.txt"),
+        conf = os.path.join(DIRECTORIES['gregorRun'], "enrich.{base}.lclESIbin{binNumber}.conf"),
     params:
         script = SCRIPTS['makeConfFile'],
         gregorR2Threshold = PARAMETERS['gregorR2Threshold'],
-        outputdir = lambda binNumber: os.path.join(DIRECTORIES['gregorRun'], "output_{base}_lclESIbin{binNumber}".format(base=base, binNumber=binNumber)),
+        outputdir = os.path.join(DIRECTORIES['gregorRun'], "output_{base}_lclESIbin{binNumber}"),
         cores = PARAMETERS['cores']
     shell:
         r"""
@@ -118,30 +84,34 @@ rule runGREGOR:
     input:
         conf = rules.setupGREGOR.output.conf
     output:
-        expand(os.path.join(DIRECTORIES['gregorRun'], "output_{base}_lclESIbin{{binNumber}}", "StatisticSummaryFile.txt"), base=base)
+        os.path.join(DIRECTORIES['gregorRun'], "output_{base}_lclESIbin{binNumber}", "StatisticSummaryFile.txt")
+    params:
+        versionPath = GREGOR_SCRIPT_PATH
     shell:
         r"""
-        GREGOR.pl --conf {input.conf}
+        ionice -c2 -n7 {params.versionPath} --conf {input.conf}
         """
         
 rule compileGREGORdataframe:
     input:
-        expand(os.path.join(DIRECTORIES['gregorRun'], "output_{base}_lclESIbin{binNumber}", "StatisticSummaryFile.txt"), base=base, binNumber = range(1, PARAMETERS['bins']+1))
+        expand(os.path.join(DIRECTORIES['gregorRun'], "output_{{base}}_lclESIbin{binNumber}", "StatisticSummaryFile.txt"), binNumber = range(1, PARAMETERS['bins']+1))
     output:
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.dat".format(base=base))
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.binned.dat")
     params:
-        script = SCRIPTS['compileGregorResult'],
-        header = "bin cell annotation feature overlap expected_overlap pval eqtl"
+        script = "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py",
+        header = "eqtl fdr0 fdr prune pruner2 maf bin cell annotation feature overlap expected_overlap pval", 
+        nameFieldSeparator = ".",
+        jobFieldSeparator = ".",
     shell:
         r"""
-        python {params.script} --filename {input} --outputfilename {output.main} --header {params.header};
+        python {params.script} --filename {input} --outputfilename {output.main} --nameFieldSeparator {params.nameFieldSeparator} --jobFieldSeparator {params.jobFieldSeparator} --header {params.header}
         """
         
 rule plotEnrichment:
     input:
         rules.compileGREGORdataframe.output
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.enrichment_eqtlByLclESIBin.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.enrichment_eqtlByLclESIBin.{base}.pdf")
     params:
         script = SCRIPTS['plotEnrich']
     shell:
@@ -153,7 +123,7 @@ rule calculateCorrelation:
     input:
         rules.compileGREGORdataframe.output
     output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "correlation_enrichmentWithLclESIbin.dat")
+        os.path.join(DIRECTORIES['intermediateFiles'], "correlation_enrichmentWithLclESIbin.{base}.dat")
     params:
         script = SCRIPTS['calculateCorrelation']
     shell:
@@ -165,7 +135,7 @@ rule plotCorrelation:
     input:
         rules.calculateCorrelation.output
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.enrichmentCorrelationWithLclESIBin.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.enrichmentCorrelationWithLclESIBin.{base}.pdf")
     params:
         script = SCRIPTS['plotCorrelation']
     shell:

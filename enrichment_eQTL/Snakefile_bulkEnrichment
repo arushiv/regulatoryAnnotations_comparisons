@@ -2,7 +2,13 @@ import os
 import pandas
 
 include: "../Snakefile_config"
+include: "Snakefile_prunePlink"
 
+# subworkflow pruning:
+#     workdir: "../effectSizeDistribution_eqtl"
+#     snakefile: "../effectSizeDistribution_eqtl/Snakefile_prunePlink"
+#     configfile: "../effectSizeDistribution_eqtl/config_prunePlink.yaml"
+    
 DIRECTORIES.update({
     'eqtlIndexDir' : "gregorRun/index_snpFiles",
     'gregorRun' : "gregorRun"
@@ -11,11 +17,9 @@ DIRECTORIES.update({
 SCRIPTS = {
     'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
     'makeConfFile' : "scripts/gregor_makeConf.py",
-    'plot' : "scripts/plotEnrichment.R",
+    'plot' : "scripts/plotEnrichment_bulk.R",
     'compileGregorResult' : "scripts/makeDataFrame_gregor.py"
 }
-
-CHROM = list(range(1, 23))
 
 PARAMETERS = {
     'fdr' : 0.1,
@@ -37,62 +41,25 @@ rule final:
     4. plot
     """
     input:
-        os.path.join(DIRECTORIES['figures'], "fig.enrichmentGtexBulk_fdr10prune8.pdf")
+        expand(os.path.join(DIRECTORIES['figures'], "fig.enrichmentGtexBulk_{base}.pdf"), base=base)
         
-rule formatEqtlFile:
-    input:
-        eqtlfile = DATA['gtex_eqtl']
-    output:
-        full = os.path.join(DIRECTORIES['data'], "gtexV7.significant{fdr}.dat".format(fdr=PARAMETERS['fdr'])),
-    params:
-        fdr = PARAMETERS['fdr']
-    run:
-        d = pandas.read_csv(input[0], sep='\t', usecols=['gene_id', 'gene_name', 'tss_distance', 'chr', 'pos', 'ref', 'alt', 'rs_id_dbSNP147_GRCh37p13', 'maf', 'pval_nominal', 'slope', 'qval'])
-        d.rename(columns={'rs_id_dbSNP147_GRCh37p13' : 'snp', 'chr' : 'chrom'}, inplace=True)
-        d = d[d['qval'] <= params.fdr]
-        d = d[~ d['snp'].isin(["rs397795305", "rs56052240","rs397791038","rs56708048"])] # Raises an error on the NCI browser
-        d.sort_values(['qval'], inplace=True)
-        d.drop_duplicates(['snp'], inplace=True)
-        d.to_csv(output.full, sep='\t', index=False)
-
-        
-rule pruneUsingNCIPortal:
-    """
-    1. Prune by LD r2 < 0.8
-    """
-    input:
-        rules.formatEqtlFile.output
-    params:
-        resultDir = os.path.join(DIRECTORIES['intermediateFiles'], "pruneResults_r2{r2}_maf{maf}".format(r2=PARAMETERS['pruneR2Threshold'], maf=PARAMETERS['mafThreshold'])),
-        mafThreshold = PARAMETERS['mafThreshold'],
-        population = PARAMETERS['POPULATION'],
-        r2Threshold = PARAMETERS['pruneR2Threshold'],
-        sortName = 'qval',
-        script = SCRIPTS['pruningScript']
-    output:
-        os.path.join(DIRECTORIES['intermediateFiles'], "{base}.dat".format(base=base))
-    shell:
-        r"""
-        python {params.script} {input} {output} -maf {params.mafThreshold} -p {params.population} -dir {params.resultDir} -s {params.sortName} -r2 {params.r2Threshold} 
-        """
-
         
 rule setupGREGOR:
     input:
-        eqtlfile = rules.pruneUsingNCIPortal.output,
+        eqtlfile = os.path.join(DIRECTORIES['intermediateFiles'], "{base}.dat"),
         annotations = expand(DATA['annotations'], cell=CELLS, region=REGIONS)
     output:
-        snpfile = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.txt".format(base=base)),
-        bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.txt"),
-        conf = os.path.join(DIRECTORIES['gregorRun'], "enrich.{base}.conf".format(base=base)),
+        snpfile = os.path.join(DIRECTORIES['eqtlIndexDir'], "{base}.txt"),
+        bedfile = os.path.join(DIRECTORIES['gregorRun'], "bedfileIndex.{base}.txt"),
+        conf = os.path.join(DIRECTORIES['gregorRun'], "enrich.{base}.conf"),
     params:
         script = SCRIPTS['makeConfFile'],
         gregorR2Threshold = PARAMETERS['gregorR2Threshold'],
-        outputdir = os.path.join(DIRECTORIES['gregorRun'], "output_{base}".format(base=base)),
+        outputdir = os.path.join(DIRECTORIES['gregorRun'], "output_{base}"),
         cores = PARAMETERS['cores']
     shell:
         r"""
-        less {input.eqtlfile} | grep -v Allele | awk '{{print "chr"$4":"$5}}' | sort | uniq > {output.snpfile} ;
+        less {input.eqtlfile} | grep -v chrom | awk '{{print "chr"$4":"$5}}' | sort | uniq > {output.snpfile} ;
         python {params.script} --conffile {output.conf} --snpfile {output.snpfile} --bedfile {output.bedfile} --gregorR2Threshold {params.gregorR2Threshold} --cores {params.cores} --outputdir {params.outputdir} --annotfiles {input.annotations};
         """
 
@@ -100,32 +67,34 @@ rule runGREGOR:
     input:
         conf = rules.setupGREGOR.output.conf
     output:
-        os.path.join(DIRECTORIES['gregorRun'], "output_{base}".format(base=base), "StatisticSummaryFile.txt")
+        os.path.join(DIRECTORIES['gregorRun'], "output_{base}", "StatisticSummaryFile.txt")
+    params:
+        versionPath = GREGOR_SCRIPT_PATH
     shell:
         r"""
-        module switch GREGOR/1.2.1
-        ionice -c2 -n7 GREGOR.pl --conf {input.conf}
+        ionice -c2 -n7 {params.versionPath} --conf {input.conf}
         """
 
 rule compileGREGORdataframe:
     input:
         rules.runGREGOR.output
     output:
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.dat".format(base=base)),
-        tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.dat.temp".format(base=base)))
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.dat"),
     params:
-        script = SCRIPTS['compileGregorResult']
+        script = "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py",
+        nameFieldSeparator = ".",
+        jobFieldSeparator = ".",
+        header = "eqtl fdr0 fdr prune pruner2 maf mafval cell annotation feature overlap expected_overlap pval"
     shell:
         r"""
-        python {params.script} --filename {input} --outputfilename {output.tempfile} ;
-        echo -e "cell\tannotation\tfeature\toverlap\texpected_overlap\tpval\teqtl" | cat - {output.tempfile} > {output.main} 
+        python {params.script} --filename {input} --outputfilename {output.main} --nameFieldSeparator {params.nameFieldSeparator} --jobFieldSeparator {params.jobFieldSeparator} --header {params.header}
         """
 
 rule plot:
     input:
         rules.compileGREGORdataframe.output
     output:
-        os.path.join(DIRECTORIES['figures'], "fig.enrichmentGtexBulk_fdr10prune8.pdf")
+        os.path.join(DIRECTORIES['figures'], "fig.enrichmentGtexBulk_{base}.pdf")
     params:
         script = SCRIPTS['plot']
     shell:
