@@ -16,8 +16,8 @@ Each directory contains code for analyses specific to different figures of the p
 The analyses use the following software:
 
 * Python 3.6.3
-* Snakemake 4.2.0
-* R 3.3.3	
+* Snakemake 5.1.4
+* R 3.3.2	
 * bedtools 2.26.0
 * GREGOR 1.2.1
 * GAT 1.3.5
