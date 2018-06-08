@@ -1,21 +1,41 @@
 import os
 
 BASE_PATH = "/lab/work/arushiv/regulatoryAnnotations_comparisons"
+GREGOR_SCRIPT_PATH = "/lab/sw/modules/GREGOR/1.2.1/script/GREGOR.pl"
 
 LINKS = {
     'annotations' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/annotations/{cell}.{region}.annotations.bed",
     'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.chromatinStates.bed.gz",
-    'atac_peaks' : "",
     'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
-    'dnase_qtl' : "",
+    'gtex_expression' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz",
+    'gtex_eqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
+    'dsqtl' : "http://eqtl.uchicago.edu/dsQTL_data/QTLs/GSE31388_dsQtlTable.txt.gz",
+    'gm_allelic_bias' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/effectSize/GM12878.biasInfo.dat",
+    'gm_expected_deviation' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/effectSize/GM12878.expectedRef.dat",
+    'hg19_liftover' : "http://hgdownload.cse.ucsc.edu/goldenpath/hg18/liftOver/hg18ToHg19.over.chain.gz",
+    'dbsnp150' : "ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606_b150_GRCh37p13/VCF/common_all_20170710.vcf.gz",
+    '1000g' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+    '1000g_index' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
 }
 
 DATA = {
     'annotations': os.path.join(BASE_PATH, "data/annotations/{cell}.{region}.annotations.bed"),
-    'chromatinStates' : os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.chromatinStates.bed"),
+    'chromatinStates' : "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/{cell}.{chromatinState}.bed", #os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.chromatinStates.bed"),
+    'workspace' : '/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/annotations/hg19_chromsizes.bed', # fix
     'gencode_annotation' : os.path.join(BASE_PATH, "data/reference/gencode.v19.tssUniq.annotation.bed.gz"),
+    'pc_gene_list' : os.path.join(BASE_PATH, "data/reference/PC_gene_list.txt"),
     'gtex_expression' : os.path.join(BASE_PATH, "data/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz"),
-    'gtex_eqtl' : os.path.join(BASE_PATH, "data/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz"),
+    'gtex_eqtl' : "/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
+    'dsqtl' : os.path.join(BASE_PATH, "data/qtlEffects/dsQtlTable.txt.gz"),
+    'gm_allelic_bias' : os.path.join(BASE_PATH, "data/qtlEffects/gm.allelic.bias.dat.gz"),
+    'gm_expected_deviation' : os.path.join(BASE_PATH, "data/qtlEffects/gm.expectedFracRef.dat.gz"),
+    'hg19_liftover' : os.path.join(BASE_PATH, "data/qtlEffects/hg18ToHg19.over.chain.gz"),
+    'dbsnp150' : os.path.join(BASE_PATH, "data/qtlEffects/common_all_20170710.vcf.gz"),
+    'gm_allelic_bias_dsp' : os.path.join(BASE_PATH, "data/qtlEffects/GM12878.snps.downsampled_{dcoverage}.bed.gz"),
+    'gm_dsp_expected_deviation' : os.path.join(BASE_PATH,  "data/qtlEffects/GM12878.post_mpileup.err.gz"),
+    '1000g' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+    '1000g_index' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
+    'vcf_sampleInfo' : os.path.join(BASE_PATH,  "data/1000g/igsr_3990samples_allPopulations.tsv"),
 }
 
 DIRECTORIES = {
@@ -29,6 +49,7 @@ DIRECTORIES = {
 REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typicalEnhancers']
 CELLS = ['GM12878','H1','HepG2','K562']
 CHROMATINSTATES = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
+CHROM = range(1, 23)
 
 rule download_annotations:
     output:
@@ -52,12 +73,73 @@ rule download_chromatinStates:
 
 rule download_gencodeAnnotation:
     output:
-        main = os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz"),
+        tempAnnot = temp(os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz")),
+        pc_gene_list = DATA['pc_gene_list'],
         annot = DATA['gencode_annotation']
     params:
         link = LINKS['gencode_annotation'],
+    run:
+        shell(r"""
+        wget {params.link} -O {output.tempAnnot} ;
+        zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.pc_gene_list}
+        """)
+        
+rule download_gtexExpression:
+    output:
+        expression = DATA['gtex_expression'],
+        eqtl = DATA['gtex_eqtl'],
+    params:
+        expressionLink = LINKS['gtex_expression'],
+        eqtlLink = LINKS['gtex_eqtl']
     shell:
         r"""
-        wget {params.link} -O {output.main} ;
-        zcat {output.main} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$c\t$start\t$end\t$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.annot}
+        wget {params.expressionLink} -O {output.expression} ;
+        wget {params.eqtlLink} -O {output.eqtl}
+        """
+
+rule download_1000g:
+    output:
+        vcf = DATA['1000g'],
+        index = DATA['1000g_index']
+    params:
+        vcfLink = LINKS['1000g'],
+        indexLink = LINKS['1000g_index']
+    shell:
+        r"""
+        wget {params.vcfLink} -O {output.vcf} ;
+        wget {params.indexLink} -O {output.index}
+        """
+
+rule download_dsqtl:
+    output:
+        dsqtl = DATA['dsqtl'],
+        hg19_liftover = DATA['hg19_liftover']
+    params:
+        link_dsqtl = LINKS['dsqtl'],
+        link_hg19_liftover = LINKS['hg19_liftover']
+    shell:
+        r"""
+        wget {params.link_dsqtl} -O {output.dsqtl}
+        wget {params.link_hg19_liftover} -O {output.hg19_liftover}
+        """
+        
+rule download_dbsnp150:
+    output:
+        DATA['dbsnp150'],
+    params:
+        link = LINKS['dbsnp150']
+    shell:
+        r"""  wget {params.link} -O {output} """
+    
+rule download_gmAllelicBias:
+    output:
+        gm_allelic_bias = DATA['gm_allelic_bias'],
+        gm_expected_deviation = DATA['gm_expected_deviation']
+    params:
+        gm_allelic_bias = LINKS['gm_allelic_bias'],
+        gm_expected_deviation = LINKS['gm_expected_deviation']
+    shell:
+        r"""
+        wget {params.gm_allelic_bias} -O {output.gm_allelic_bias} ;
+        wget {params.gm_expected_deviation} -O {output.gm_expected_deviation} ;
         """
