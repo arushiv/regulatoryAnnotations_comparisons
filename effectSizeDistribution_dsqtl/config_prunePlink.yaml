@@ -1,0 +1,14 @@
+# general
+fdr : 0.1
+maf : 0.2
+# prune
+population_type: "Population code"  # Choose which column in vcf_sampleInfo file to subset samples on. Another option could be "Population code" to subest by population
+population_code: "YRI"
+output_directory: "intermediateFiles/prune_and_proxies"  # Where output will be saved
+prune_r2 : 0.8
+plink_p1 : 0.1
+plink_p2 : 0.1
+# get proxy
+proxy_r2 : 0.99
+ldwindow: 1000000
+
