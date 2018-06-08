@@ -29,7 +29,7 @@ makePlot <- function(d){
 
 d <- subset(d, ! annotation %in% c("ActiveTss","typicalEnhancerChromatin") )
 d$Enrich <- (d$overlap/d$expected_overlap)
-d$bin <- gsub("lclESIbin", "", d$bin)
+d$bin <- gsub("0_lclESIbin", "", d$bin)
 
 pdf(args[2], height=3, width=7)
 makePlot(renameAnnotations(d))

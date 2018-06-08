@@ -9,7 +9,7 @@ d <- read.table(gzfile(args[1]), header=T)
 
 # eqtl    bin     job     cell    annotation      feature overlap expected_overlap        pval
 
-d$bin <- gsub("lclESIbin","",d$bin)
+d$bin <- gsub("0_lclESIbin","",d$bin)
 
 d$enrichment <- d$overlap/d$expected_overlap
 
