@@ -113,7 +113,7 @@ distTssAnnot <- function(d){
     return(p)
 }
 ## d2 <- d[!duplicated(d[c("chrom","indexPos","snp","annotation")]),]   # count SNP (index or proxy) only once for each annotation
-d2 <- d[!duplicated(d[c("chrom","snp","annotation")]),]   # count SNP (index or proxy) only once for each annotation
+d2 <- d[!duplicated(d[c("chrom","SNP","annotation")]),]   # count SNP (index or proxy) only once for each annotation
 
 d2$absoluteEffect <- abs(d2$slope)
 d2 <- data.frame(d2 %>% group_by(annotation) %>% mutate(count = n()))
