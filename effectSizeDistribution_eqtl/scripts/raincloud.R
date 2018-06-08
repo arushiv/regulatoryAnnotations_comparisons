@@ -187,8 +187,8 @@ d2 <- renameAnnotations(d2)
 pdf(args[2], height=2.5, width=3)
 ## makePlot(renameAnnotations(d2))
 makeRaincloud(d2)
-makePlotSimple(d2)
-distTssAnnot(d2)
+## makePlotSimple(d2)
+## distTssAnnot(d2)
 dev.off()
 
 
