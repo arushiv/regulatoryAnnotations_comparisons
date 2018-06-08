@@ -2,6 +2,8 @@ import os
 import pandas
 import numpy
 
+include: "../Snakefile_config"
+
 GAT_DIR = config['DIRECTORIES']['gat_dir']
 GAT_output_figure = os.path.join(config['DIRECTORIES']['figures'], config['DATA']['fig_output'])
 GAT_OUTPUT_DIR = eval(config['DIRECTORIES']['gatResults'])
@@ -21,9 +23,9 @@ rule runGAT:
     IMP - do not use --with-segment-tracks flag if segment files contain 4 columns and they don't have to be treated as separate
     """
     input:
-        annot = config['DATA']['annotation'],
-        segment = config['DATA']['segment'],
-        workspace = config['DATA']['workspace']
+        annot = os.path.join(BASE_PATH, 'data/annotations/{cell1}.{annotation1}.annotations.bed'),
+        segment = os.path.join(BASE_PATH, 'data/annotations/{cell2}.{annotation2}.annotations.bed'),
+        workspace = DATA['workspace']
     output:
         full = temp(os.path.join(GAT_OUTPUT_DIR, config['DATA']['output']))
     params:
