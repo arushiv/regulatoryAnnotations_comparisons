@@ -34,5 +34,5 @@ $ mkdir -p logs && snakemake --cluster-config cluster.yaml  --cluster "sbatch --
 	
 ## Print workflow DAG
 ```
-	snakemake -s Snakefile_GAT --dag | dot -Tsvg > workflow_GAT.svg
+snakemake -s Snakefile_GAT --dag | dot -Tsvg > workflow_GAT.svg
 ```
