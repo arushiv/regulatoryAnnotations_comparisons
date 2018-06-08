@@ -1,11 +1,12 @@
 import os
+import pandas
 
 BASE_PATH = "/lab/work/arushiv/regulatoryAnnotations_comparisons"
 GREGOR_SCRIPT_PATH = "/lab/sw/modules/GREGOR/1.2.1/script/GREGOR.pl"
 
 LINKS = {
     'annotations' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/annotations/{cell}.{region}.annotations.bed",
-    'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.{chromatinState}.bed.gz",
+    'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.chromatinStates.bed.gz",
     'workspace' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/hg19_chromsizes.bed",
     'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
     'gtex_expression' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz",
@@ -52,6 +53,10 @@ CELLS = ['GM12878','H1','HepG2','K562']
 CHROMATINSTATES = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
 CHROM = range(1, 23)
 
+rule all:
+    input:
+        os.path.join(BASE_PATH,  "data/chromatinStates/GM12878.1_Active_TSS.bed")
+    
 rule download_annotations:
     output:
         protected(DATA['annotations'])
@@ -62,15 +67,20 @@ rule download_annotations:
 
 rule download_chromatinStates:
     output:
-        protected(DATA['chromatinStates'])
+        gzip = temp(os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.chromatinStates.bed.gz")),
+        separate = expand(os.path.join(BASE_PATH,  "data/chromatinStates/{{cell}}.{chromatinState}.bed"), chromatinState = CHROMATINSTATES)# protected(DATA['chromatinStates'])
     params:
-        outputName =  os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed.gz"),
         link = LINKS['chromatinStates']
-    shell:
-        r"""
-        wget {params.link} -O {params.outputName}
-        gunzip {params.outputName}
-        """
+    run:
+        shell(r"""
+        wget {params.link} -O {output.gzip}
+        """)
+        d = pandas.read_csv(output.gzip, sep='\t', header=None, names=['chrom','start','end','chromatinState','colorCode'])
+        for name, group in d.groupby('chromatinState'):
+            chromatinState_name = name.replace('/', '_')
+            output_file_name = os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed".format(cell=wildcards.cell, chromatinState=chromatinState_name))
+            group[['chrom','start','end']].to_csv(output_file_name, sep='\t', header=False, index=False)
+        
 
 rule download_workspace:
     output:
