@@ -3,11 +3,6 @@ import pandas
 
 include: "../Snakefile_config"
 include: "Snakefile_prunePlink"
-
-# subworkflow pruning:
-#     workdir: "../effectSizeDistribution_eqtl"
-#     snakefile: "../effectSizeDistribution_eqtl/Snakefile_prunePlink"
-#     configfile: "../effectSizeDistribution_eqtl/config_prunePlink.yaml"
     
 DIRECTORIES.update({
     'eqtlIndexDir' : "gregorRun/index_snpFiles",
@@ -15,10 +10,9 @@ DIRECTORIES.update({
 })
 
 SCRIPTS = {
-    'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
     'makeConfFile' : "scripts/gregor_makeConf.py",
     'plot' : "scripts/plotEnrichment_bulk.R",
-    'compileGregorResult' : "scripts/makeDataFrame_gregor.py"
+    'compile_df' : "scripts/makeDataFrame_gregor.py"
 }
 
 PARAMETERS = {
@@ -81,7 +75,7 @@ rule compileGREGORdataframe:
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "stats.{base}.dat"),
     params:
-        script = "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py",
+        script = SCRIPTS['compile_df'], 
         nameFieldSeparator = ".",
         jobFieldSeparator = ".",
         header = "eqtl fdr0 fdr prune pruner2 maf mafval cell annotation feature overlap expected_overlap pval"
