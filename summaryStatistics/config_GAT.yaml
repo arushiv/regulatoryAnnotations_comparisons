@@ -6,9 +6,6 @@ DIRECTORIES:
   gatCountsIntermediate: "os.path.join(config['DIRECTORIES']['gat_dir'], 'gatCountsIntermediate')"
 
 DATA: 
-  annotation: "/lab/work/arushiv/regulatoryAnnotations_comparisons/data/annotations/{cell1}.{annotation1}.annotations.bed"
-  segment: "/lab/work/arushiv/regulatoryAnnotations_comparisons/data/annotations/{cell2}.{annotation2}.annotations.bed"
-  workspace: "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/annotations/hg19_chromsizes.bed"
   output: "{cell1}.{annotation1}.{cell2}.{annotation2}.gatResults.dat"
   count_output: "{cell1}.{annotation1}.{cell2}.{annotation2}.%s.countsOutput"
   log: "{cell1}.{annotation1}.{cell2}.{annotation2}.gatLog.dat"
@@ -21,5 +18,5 @@ PARAMETERS:
   colnames: "cell1 annotation1 cell2 annotation2"
         
 SCRIPTS: 
-  compileResults: "/home/arushiv/toolScripts/analyze_GATResults.py"
+  compileResults: "scripts/analyze_GATResults.py"
   plot: "scripts/plot_gat.R"                  
