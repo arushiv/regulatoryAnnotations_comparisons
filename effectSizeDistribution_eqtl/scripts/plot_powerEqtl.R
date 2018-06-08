@@ -40,7 +40,10 @@ nTests = 100000
 
 d1$power_100 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=1)
 ## d1$power_100 = powerEQTL.SLR(0.5, typeI = 0.05, nTests = 200000, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=1)
+d1$power_200 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 200, verbose=FALSE, mystddev=1)
 d1$power_250 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 250, verbose=FALSE, mystddev=1)
+d1$power_300 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 300, verbose=FALSE, mystddev=1)
+d1$power_400 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 400, verbose=FALSE, mystddev=1)
 d1$power_500 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 500, verbose=FALSE, mystddev=1)
 
 d2 <- renameAnnotations(d1)
@@ -48,7 +51,10 @@ d2$variable <- as.numeric(gsub("X", "", d2$variable))
 
 pdf(args[2], height=2.5, width=3)
 makePlot(d2, "power_100", 100)
+makePlot(d2, "power_200", 200)
 makePlot(d2, "power_250", 250)
+makePlot(d2, "power_300", 300)
+makePlot(d2, "power_400", 400)
 makePlot(d2, "power_500", 500)
 dev.off()
 
