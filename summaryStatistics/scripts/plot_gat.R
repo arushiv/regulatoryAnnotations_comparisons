@@ -1,7 +1,6 @@
 library(ggplot2)
 library(reshape2)
 library(scales)
-library(gplots)
 library(ggpubr)
 
 args <- commandArgs(TRUE)
@@ -24,8 +23,7 @@ makeHeatmap <- function(d, colname){
         geom_tile(aes(fill=l2fold)) +
         facet_grid(annotation2 ~ annotation1) +
         scale_fill_gradientn(colours=c("blue", "white", "orange", "red", "darkred"), values=rescale(colscale), breaks=colscale, labels=colscale, name="log2(Fold enrichment)") +
-        theme(text = element_text(size=7), axis.text.x = element_text(angle=90, vjust=0.5, hjust=1), panel.background = element_rect(fill="grey"), panel.grid = element_blank()) ## +
-        ## guides(fill=guide_legend(title="log2(Fold enrichment)"))
+        theme(text = element_text(size=7), axis.text.x = element_text(angle=90, vjust=0.5, hjust=1), panel.background = element_rect(fill="grey"), panel.grid = element_blank()) 
     return(p)
 }
 
