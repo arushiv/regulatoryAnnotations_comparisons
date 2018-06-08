@@ -5,7 +5,8 @@ GREGOR_SCRIPT_PATH = "/lab/sw/modules/GREGOR/1.2.1/script/GREGOR.pl"
 
 LINKS = {
     'annotations' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/annotations/{cell}.{region}.annotations.bed",
-    'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.chromatinStates.bed.gz",
+    'chromatinStates' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/{cell}.{chromatinState}.bed.gz",
+    'workspace' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/hg19_chromsizes.bed",
     'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
     'gtex_expression' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz",
     'gtex_eqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
@@ -20,8 +21,8 @@ LINKS = {
 
 DATA = {
     'annotations': os.path.join(BASE_PATH, "data/annotations/{cell}.{region}.annotations.bed"),
-    'chromatinStates' : "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/{cell}.{chromatinState}.bed", #os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.chromatinStates.bed"),
-    'workspace' : '/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/annotations/hg19_chromsizes.bed', # fix
+    'chromatinStates' : os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed"),
+    'workspace' : os.path.join(BASE_PATH, "data/reference/hg19_chromsizes.bed"),
     'gencode_annotation' : os.path.join(BASE_PATH, "data/reference/gencode.v19.tssUniq.annotation.bed.gz"),
     'pc_gene_list' : os.path.join(BASE_PATH, "data/reference/PC_gene_list.txt"),
     'gtex_expression' : os.path.join(BASE_PATH, "data/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz"),
@@ -55,21 +56,29 @@ rule download_annotations:
     output:
         protected(DATA['annotations'])
     params:
-        link = lambda wildcards: LINKS['annotations'].format(cell=wildcards.cell, region=wildcards.region)
+        link = LINKS['annotations']
     shell:
         "wget {params.link} -O {output}"
 
 rule download_chromatinStates:
     output:
-        expand("../data/annotations/{{cell}}.{region}.annotations.bed", region=REGIONS) 
+        protected(DATA['chromatinStates'])
     params:
-        outputName = lambda wildcards: "../data/chromatinStates/{cell}.bed.gz",
-        link = lambda wildcards: LINKS['chromatinStates'].format(cell=wildcards.cell)
+        outputName =  os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed.gz"),
+        link = LINKS['chromatinStates']
     shell:
         r"""
         wget {params.link} -O {params.outputName}
         gunzip {params.outputName}
         """
+
+rule download_workspace:
+    output:
+        DATA['workspace']
+    params:
+        link = LINKS['workspace']
+    shell:
+        """wget {params.link} -O {output} """
 
 rule download_gencodeAnnotation:
     output:
