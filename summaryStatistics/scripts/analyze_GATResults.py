@@ -33,7 +33,7 @@ def makeResultDf(all_files, string, split, infosplit):
 
     
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Make dataframe from GAT results.', usage='python ~arushiv/toolScripts/analyze_GATResults.py -s *.out -d outputDir/ ')
+    parser = argparse.ArgumentParser(description='Make dataframe from GAT results.', usage='python analyze_GATResults.py -s *.out -d outputDir/ ')
     parser.add_argument('-s','--inputString', type=str, default='*.txt', help="""Files which should be parsed. (default: *.txt)""")
     parser.add_argument('-d','--resultDir', type=str, default='.', help="""Directory where result files reside. (default: current Directory)""")
     parser.add_argument('outputfile', type=str, help="""Output file name.""")
