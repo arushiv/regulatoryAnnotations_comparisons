@@ -1,5 +1,6 @@
 # Regulatory Annotations Comparisons
 This repository contains code to reproduce results of the manuscript:
+Cell specificty of regulatory annotations and their genetics effects on gene expression
 
 Each directory contains code for analyses specific to different figures of the paper. Everything is run using [snakemake](http://snakemake.readthedocs.io/en/latest/). The analysis directories follow this general pattern:
 ```	
