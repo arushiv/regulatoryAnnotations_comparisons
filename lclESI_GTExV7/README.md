@@ -1,3 +1,8 @@
+## Run
+```
+$       snakemake -p --latency-wait 400
+```
+	
 Use GTEx v7 RNA seq data to calculate LCL-ESI
 This workflow is included as a sub-workflow of analyses that require these results, so no need to run this separately.
 	
