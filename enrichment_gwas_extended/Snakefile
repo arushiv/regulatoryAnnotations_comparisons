@@ -1,0 +1,279 @@
+import os
+import pandas
+import numpy
+import subprocess as sp
+import glob
+import re
+
+include: "../Snakefile_config"
+
+DATA.update({'nhgri_gwas': "/lab/data/gwas/2018_06_NHGRI_EBI_Catalog_download/gwas_catalog_v1.0.2-associations_e92_r2018-05-29.tsv"})
+
+GREGOR_DIR = config['DIRECTORIES']['gregor_dir']
+GREGOR_outputDir = os.path.join(GREGOR_DIR, config['DIRECTORIES']['output_dir'])
+ANNOTATIONS = DATA['annotations']
+GREGOR_CONFIG_NAME = config['PARAMETERS']['config_name']
+GREGOR_output_figure = os.path.join(config['DIRECTORIES']['figures'], config['DATA']['output_fig'])
+
+SCRIPTS = {
+    'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
+    'makeConfFile' : "scripts/gregor_makeConf.py",
+    'proxyFromGREGOR' : "scripts/gregorOutputCompileLdSnps.py",
+    'plot' : "scripts/plot.R"
+}
+
+CHROM = list(range(1, 23))
+
+
+def select_traits(nhgri_gwas, ancestry, minN):
+    d = pandas.read_csv(nhgri_gwas, sep='\t',
+                        usecols=['LINK', 'DISEASE/TRAIT', 'INITIAL SAMPLE SIZE',
+                                 'REPLICATION SAMPLE SIZE', 'CHR_ID', 'CHR_POS', 'SNPS',
+                                 'MERGED', 'RISK ALLELE FREQUENCY', 'P-VALUE', 'PVALUE_MLOG',
+                                 'OR or BETA', '95% CI (TEXT)','MAPPED_TRAIT']).drop_duplicates()
+    d.dropna(subset=['SNPS'], axis=0, inplace=True)
+
+    """Subest for European ancestry"""
+
+    d = d[d['INITIAL SAMPLE SIZE'].str.contains(ancestry)]
+    
+    nd = pandas.DataFrame(d.groupby(['DISEASE/TRAIT'])['DISEASE/TRAIT'].size())
+    traits = nd[nd['DISEASE/TRAIT'] >= minN]['DISEASE/TRAIT'].index.tolist()
+    d = d[d['DISEASE/TRAIT'].isin(traits)]
+
+    d.rename(columns={'SNPS' : 'SNP', 'CHR_ID' : 'chrom', 'P-VALUE' : 'P', 'DISEASE/TRAIT' : 'trait'}, inplace=True)
+
+    d.loc[:,'SNP'] = d['SNP'].map(lambda x: re.split(';|,', x)[0])
+    d.loc[:,'SNP'] = d['SNP'].map(lambda x: x.rstrip())
+
+
+    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'/.+', '', x))
+    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r',.+', '', x))
+    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'\(.+\)', '', x))
+
+    d.loc[:, 'trait'] = d['trait'].str.replace("Body mass index", "BMI")
+    keys = ['Hip circumference', 'Waist-to-hip ratio', 'Waist circumference', 'High light scatter reticulocyte',
+                    'Post bronchodilator FEV1', 'Platelet', 'Mean corpuscular hemoglobin', 'BMI',
+                    'Neutrophil', 'Eosinophil', 'Granulocyte']
+
+    def fix(x):
+        for key in keys:
+            if x.startswith(key):
+                return key
+        return x
+        
+    d.loc[:, 'trait'] = d['trait'].map(fix)
+    d.loc[:, 'trait'] = d['trait'].map(lambda x: x.rstrip())
+    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub("'|,|\(| ", "_", x))
+
+    # print(d['trait'].drop_duplicates().tolist())
+    return d
+
+d_selected_traits = select_traits(DATA['nhgri_gwas'], 'European', 100)
+# TRAITS = glob_wildcards(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"))[0]
+
+rule final:
+    """
+    NHGRI GWAS 
+    1. Prune by LD r2<0.2
+    2. Run GREGOR enrichment
+    """
+    input:
+        stats = dynamic(expand(os.path.join(GREGOR_DIR, "output_{{trait}}.ld{gregor_r2}", "StatisticSummaryFile.txt"),
+                               gregor_r2 = config['PARAMETERS']['gregor_r2'])),
+        fig = GREGOR_output_figure
+        # vcf = os.path.join(config['output_directory'], "myfile.selected.recode.vcf.gz"),
+        # inputfile = expand(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"), trait=TRAITS) #rules.setup_eqtl_for_pruning.output.full
+
+        
+
+rule makeFullSnpList_forPruning:
+    """Make full SNP list to subset vcf files once """
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "full_snp_list.txt")
+    run:
+        d_selected_traits['SNP'].drop_duplicates().to_csv(output.main, index=False, header=False)
+
+
+rule make_trait_files:
+    output:
+        main = dynamic(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"))
+    run:
+        for trait, group in d_selected_traits.groupby('trait'):
+            filename = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", f"selected.{trait}.dat")
+            group[['SNP', 'P']].to_csv(filename, sep='\t', index=False, na_rep="NA")
+
+        
+rule makeSampleFile:
+    """Get samples according to population codes to subest 1000g vcf files for pruning"""
+    input:
+        sampleInfo = DATA['vcf_sampleInfo']
+    output:
+        samplefile = os.path.join(config['output_directory'], "subsetSamples.txt")
+    run:
+        d = pandas.read_csv(input.sampleInfo, sep='\t')
+        d = d[d[config['population_type']] == config['population_code']]
+        d[['Sample name']].to_csv(output[0], header=False, index=False)
+
+        
+rule subsetVCF:
+    """Subset vcf for samples, remove indels and SNPs which are to be pruned among themselves."""
+    input:
+        snpfile = DATA['1000g'],
+        samplefile = rules.makeSampleFile.output.samplefile,
+        posfile = rules.makeFullSnpList_forPruning.output.main, #rules.setup_eqtl_for_pruning.output.snplist
+    output:
+        vcf = temp(os.path.join(config['output_directory'], "chr{chrom}.selected.recode.vcf.gz")),
+        index = temp(os.path.join(config['output_directory'], "chr{chrom}.selected.recode.vcf.gz.tbi")),
+    params:
+        outstring = os.path.join(config['output_directory'], "chr{chrom}.selected"),
+    shell:
+        r"""
+        vcftools --gzvcf {input.snpfile}  --keep {input.samplefile} \
+        --remove-indels \
+        --snps {input.posfile} \
+        --out {params.outstring} --recode ;
+        bgzip {params.outstring}.recode.vcf
+        tabix {output.vcf}
+        """
+
+        
+rule get_plink_files:
+    """
+    Make plink format input files after filtering 1000g vcf. IMP - vcf files are usually large so designated to be temp
+    plink map and ped files only contain bi-allelic loci. 
+    """
+    input:
+        vcf = expand(os.path.join(config['output_directory'], "chr{chrom}.selected.recode.vcf.gz"), chrom = CHROM),
+        index = expand(os.path.join(config['output_directory'], "chr{chrom}.selected.recode.vcf.gz.tbi"), chrom = CHROM)
+    output:
+        vcf = os.path.join(config['output_directory'], "myfile.selected.recode.vcf.gz"),
+        mapfile = temp(os.path.join(config['output_directory'], "myfile.selected.map")),
+        pedfile = temp(os.path.join(config['output_directory'], "myfile.selected.ped")),
+    params:
+        outstring = os.path.join(config['output_directory'], "myfile.selected"),
+    shell:
+        r"""
+        vcf-concat {input.vcf} | bgzip -c > {output.vcf} ;
+        vcftools --gzvcf {output.vcf} --plink --out {params.outstring}
+        """
+
+        
+rule prune_plink:
+    """
+    Prune a list od SNPs using P value of association, using 1000g phase 3 vcf. Population codes or Superpopulation codes can be used to subset 1000g samples  
+    Vcf files first subset by the selected population. All indels are removed. Also, plink files only contain bialleic SNPs. Pruning is done using --clump flags
+    """
+    input:
+        mapfile = rules.get_plink_files.output.mapfile,
+        pedfile = rules.get_plink_files.output.pedfile,
+        inputfile = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat") #rules.setup_eqtl_for_pruning.output.full
+    output:
+        clumpedfile = os.path.join(config['output_directory'], "{trait}.selected.clumped"),
+    params:
+        instring = os.path.join(config['output_directory'], "myfile.selected"),#rules.get_plink_files.params.outstring,
+        outstring =  os.path.join(config['output_directory'], "{trait}.selected"),
+        r2 = config['prune_r2'],
+        p1 = .99,
+        p2 = .99,
+    shell:
+        r"""
+        /lab/sw/modules/plink/1.9/bin/plink --file {params.instring} \
+        --clump {input.inputfile} --clump-r2 {params.r2} --clump-p1 {params.p1} --clump-p2 {params.p2} \
+        --out {params.outstring}
+        """
+
+        
+rule organize_pruned_results:
+    input:
+        pruned = rules.prune_plink.output.clumpedfile,
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.{trait}.txt"),
+    run:
+        dpruned = pandas.read_csv(input.pruned, delim_whitespace=True)
+        dpruned.loc[:,'out'] = dpruned.apply(lambda x: "chr{chrom}:{pos}".format(chrom = x['CHR'], pos = x['BP']), axis=1)
+        print(output.main)
+        dpruned[['out']].to_csv(output.main, index=False, header=False)
+            
+
+#####
+## Running GREGOR for GWAS enrichment
+#####
+
+rule makeBedFiles:
+    """Add all annotation paths to GREGOR bedfile - all annotations will be tested in one GREGOR run, so we make one file """
+    input:
+        annotations = expand(DATA['annotations'], cell = CELLS, region = REGIONS),
+    output:
+        bedfile = os.path.join(GREGOR_DIR, "bedfile.txt"),
+    shell:
+        """
+        for i in {input.annotations}; do echo $i ; done > {output.bedfile}
+        """
+        
+rule setupGREGOR:
+    """Provide parameters to make GREGOR .conf file - one file per trait """
+    input:
+        snpfile = rules.organize_pruned_results.output.main,
+        bedfile = rules.makeBedFiles.output.bedfile
+    output:
+        conf = os.path.join(GREGOR_DIR, GREGOR_CONFIG_NAME),
+    params:
+        script = config['SCRIPTS']['makeConfFile'],
+        population = config['PARAMETERS']['POPULATION'],
+        gregorR2Threshold = '{gregor_r2}',
+        outputdir = GREGOR_outputDir,
+        cores = config['PARAMETERS']['cores']
+    shell:
+        r"""
+        python {params.script} --conffile {output.conf} --snpfile {input.snpfile} --bedfile {input.bedfile} \
+        --gregorR2Threshold {params.gregorR2Threshold} --cores {params.cores} --outputdir {params.outputdir} \
+        --population {params.population};
+        """
+        
+rule runGREGOR:
+    """Run GREGOR """
+    input:
+        conf = rules.setupGREGOR.output.conf
+    output:
+        stats = os.path.join(GREGOR_outputDir, "StatisticSummaryFile.txt")
+    params:
+        gregor_version_path = config['PARAMETERS']['gregor_version_path']
+    shell:
+        r"""
+        ionice -c2 -n7 {params.gregor_version_path} --conf {input.conf}
+        """
+    
+
+rule GREGOR_assembleStats:
+    """Assemble dataframe for all traits in one file """
+    input:
+        stats = dynamic(expand(os.path.join(GREGOR_DIR, "output_{{trait}}.ld{gregor_r2}", "StatisticSummaryFile.txt"),
+                       gregor_r2 = config['PARAMETERS']['gregor_r2']))
+    output:
+        stats = os.path.join(config['DIRECTORIES']['gregor_dir'], config['DATA']['output']),
+    params:
+        script = config['SCRIPTS']['assembleDF'],
+        nameFieldSeparator = config['PARAMETERS']['nameFieldSeparator'],
+        jobFieldSeparator = config['PARAMETERS']['jobFieldSeparator'],
+        header = config['PARAMETERS']['header']
+    shell:
+        """
+        python {params.script} --filename {input.stats} --outputfilename {output.stats} --nameFieldSeparator {params.nameFieldSeparator} --jobFieldSeparator {params.jobFieldSeparator} --header {params.header}
+        """
+
+        
+rule GREGOR_plotEnrichment:
+    """Plot enrichment """
+    input:
+        rules.GREGOR_assembleStats.output.stats
+    output:
+        gregor = GREGOR_output_figure
+    params:
+        minOverlap = "" if not 'minOverlap' in config['PARAMETERS'] else config['PARAMETERS']['minOverlap'],
+        script = config['SCRIPTS']['plot']
+    shell:
+        """
+        Rscript {params.script} {input} {output.gregor} {params.minOverlap}
+        """
+                       

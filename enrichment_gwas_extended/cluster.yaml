@@ -1,0 +1,14 @@
+__default__:
+  time: "2:00:00"
+  cpus: 1
+  mem: "8000M"
+  jobname: "s.{rule}.{wildcards}"
+  output: "logs/slurm-%A_%a.{rule}.{wildcards}.out"
+  error: "logs/slurm-%A_%a.{rule}.{wildcards}.err"
+
+
+runGREGOR:
+  mem: "4000M"
+  cpus: 10
+  time: "4:00:00"
+  
