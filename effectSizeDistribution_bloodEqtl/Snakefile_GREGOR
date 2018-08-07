@@ -1,0 +1,113 @@
+import subprocess as sp
+import os
+import glob
+import pandas
+import numpy
+
+GREGOR_DIR = config['DIRECTORIES']['gregor_dir']
+GREGOR_outputDir = os.path.join(GREGOR_DIR, config['DIRECTORIES']['output_dir'])
+ANNOTATIONS = eval(config['DATA']['ANNOTATIONS'])
+TRAITS = eval(config['PARAMETERS']['TRAITS'])  
+GREGOR_INPUT_SNPS = config['DATA']['input_snps']
+GREGOR_CONFIG_NAME = config['PARAMETERS']['config_name']
+GREGOR_output_figure = os.path.join(config['DIRECTORIES']['figures'], config['DATA']['output_fig'])
+GREGOR_proxies = os.path.join(config['DIRECTORIES']['gregor_dir'], config['DATA']['output_proxy'])
+
+rule all_GREGOR:
+    """
+    Run GREGOR and assemble dataframe
+    """
+    input:
+        GREGOR_output_figure,
+        eval(config['PARAMETERS']['PROXY'])
+
+rule makeBedFiles:
+    """Add all annotation paths to GREGOR bedfile - all annotations will be tested in one GREGOR run, so we make one file """
+    input:
+        annotations = ANNOTATIONS,
+    output:
+        bedfile = os.path.join(GREGOR_DIR, "bedfile.txt"),
+    shell:
+        """
+        for i in {input.annotations}; do echo $i ; done > {output.bedfile}
+        """
+        
+rule setupGREGOR:
+    """Provide parameters to make GREGOR .conf file - one file per trait """
+    input:
+        snpfile = GREGOR_INPUT_SNPS,
+        bedfile = rules.makeBedFiles.output.bedfile
+    output:
+        conf = os.path.join(GREGOR_DIR, GREGOR_CONFIG_NAME),
+    params:
+        script = config['SCRIPTS']['makeConfFile'],
+        population = config['PARAMETERS']['POPULATION'],
+        gregorR2Threshold = '{gregor_r2}',
+        outputdir = GREGOR_outputDir,
+        cores = config['PARAMETERS']['cores']
+    shell:
+        r"""
+        python {params.script} --conffile {output.conf} --snpfile {input.snpfile} --bedfile {input.bedfile} \
+        --gregorR2Threshold {params.gregorR2Threshold} --cores {params.cores} --outputdir {params.outputdir} \
+        --population {params.population};
+        """
+        
+rule runGREGOR:
+    """Run GREGOR """
+    input:
+        conf = rules.setupGREGOR.output.conf
+    output:
+        ld = os.path.join(GREGOR_outputDir, "index_SNP/index.snp.LD.txt"),
+        stats = os.path.join(GREGOR_outputDir, "StatisticSummaryFile.txt")
+    params:
+        gregor_version_path = config['PARAMETERS']['gregor_version_path']
+    shell:
+        r"""
+        ionice -c2 -n7 {params.gregor_version_path} --conf {input.conf}
+        """
+    
+
+rule GREGOR_assembleStats:
+    """Assemble dataframe for all traits in one file """
+    input:
+        stats = expand(rules.runGREGOR.output.stats,
+                       trait = TRAITS,
+                       gregor_r2 = config['PARAMETERS']['gregor_r2'])
+    output:
+        stats = os.path.join(config['DIRECTORIES']['gregor_dir'], config['DATA']['output']),
+    params:
+        script = config['SCRIPTS']['assembleDF'],
+        nameFieldSeparator = config['PARAMETERS']['nameFieldSeparator'],
+        jobFieldSeparator = config['PARAMETERS']['jobFieldSeparator'],
+        header = config['PARAMETERS']['header']
+    shell:
+        """
+        python {params.script} --filename {input.stats} --outputfilename {output.stats} --nameFieldSeparator {params.nameFieldSeparator} --jobFieldSeparator {params.jobFieldSeparator} --header {params.header}
+        """
+
+rule GREGOR_plotEnrichment:
+    """Plot enrichment """
+    input:
+        rules.GREGOR_assembleStats.output.stats
+    output:
+        gregor = GREGOR_output_figure
+    params:
+        minOverlap = "" if not 'minOverlap' in config['PARAMETERS'] else config['PARAMETERS']['minOverlap'],
+        script = config['SCRIPTS']['plot']
+    shell:
+        """
+        Rscript {params.script} {input} {output.gregor} {params.minOverlap}
+        """
+                       
+                       
+rule getProxies:
+    input:
+        rules.runGREGOR.output.ld
+    output:
+        GREGOR_proxies
+    params:
+        script = config['SCRIPTS']['getProxies']
+    shell:
+        r"""                                                                                                                                                                                            
+        python {params.script} {input} {output}                                                                                                                                                         
+        """                                    

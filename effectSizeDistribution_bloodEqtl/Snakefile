@@ -1,0 +1,207 @@
+import os
+import pandas
+import numpy
+
+include: "../Snakefile_config"
+include: "Snakefile_prunePlink"
+
+DIRECTORIES.update({
+    'regression' : "regression",
+    'eqtlIndexDir' : "gregorRun/index_snpFiles",
+    'gregorRun' : "gregorRun"
+}) 
+
+DATA.update({'gtex_eqtl':"/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Whole_Blood.v7.egenes.txt.gz"})
+
+SCRIPTS = {
+    'effectVsMaf' : "scripts/plot_effectVsMaf.R",
+    'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
+    'makeConfFile' : "scripts/gregor_makeConf.py",
+    'proxyFromGREGOR' : "scripts/gregorOutputCompileLdSnps.py",
+    'plot_raincloud' : "scripts/raincloud.R",
+    'regression' : "scripts/regress.py",
+    'powerCalc' : "scripts/plot_powerEqtl.R"
+}
+
+CHROM = list(range(1, 23))
+
+rule final:
+    """
+    GTEx gene based FDR 10% eQTL set - 
+    1. Prune by LD
+    2. Filter by MAF
+    3. Get r2>0.99 buddies
+    4. Intersect with annotations and plot
+    5. Also plot effect size vs MAF 
+    6. Perform power calculations
+    7. Perform regression
+    """
+    input:
+        effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.{cell}.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
+                                     cell = ['GM12878','H1','HepG2','K562'], fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        # regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+        #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        # powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf"),
+        # effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
+    
+rule formatEqtlFile:
+    """Select by FDR threshold, retain 1 assocaiation per SNP """
+    input:
+        eqtlfile = DATA['gtex_eqtl']
+    output:
+        full = os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.significantfdr{fdr}.dat"),
+    run:
+        d = pandas.read_csv(input[0], sep='\t', usecols=['gene_id', 'gene_name', 'tss_distance', 'chr', 'pos', 'ref', 'alt', 'rs_id_dbSNP147_GRCh37p13', 'maf', 'pval_nominal', 'slope', 'qval'])
+        d.rename(columns={'rs_id_dbSNP147_GRCh37p13' : 'SNP', 'chr' : 'chrom'}, inplace=True)
+        d = d[d['qval'] <= float(wildcards.fdr)]
+        d.sort_values(['qval'], inplace=True)
+        d.drop_duplicates(['SNP'], inplace=True) # if SNP associated with 2 or more genes, keep the stronger association
+        d.to_csv(output.full, sep='\t', index=False)
+
+
+rule plotEffectVsMAF:
+    "Plot effect vs MAF"
+    input:
+        rules.formatEqtlFile.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf")
+    params:
+        script = SCRIPTS['effectVsMaf']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
+
+rule setup_eqtl_for_pruning:
+    """
+    Filter by MAF and setup file header names for plink clump input
+    Pruning and proxy fetching using Snakefile_prunePlink
+    Comparing pruning using plink vs NCI browser: plink workflow retains more SNPs that leads to duplicates when proxy SNPs are fetched
+    !! Pruning step brings more SNPs than when pruned using the NCI browser. Possibly because some SNPs were removed from input list as NCI browser gives errors. 
+    Also while using plink, since only biallelic SNPs are retained, all other SNPs were manually added to the list later.
+    Comparing fetching proxy SNPs using vcftools vs GREGOR output - similar proxy SNPs were fetched 
+    """
+    input:
+        rules.formatEqtlFile.output.full
+    output:
+        full = os.path.join(DIRECTORIES['intermediateFiles'], "forPruning.gtexV7.significantfdr{fdr}.maf{maf}.dat"),
+        snplist = os.path.join(DIRECTORIES['intermediateFiles'], "snplist_to_subset.significantfdr{fdr}.maf{maf}.dat"),
+    run:
+        d = pandas.read_csv(input[0], sep='\t')
+        d.rename(columns={'qval' : 'P'}, inplace=True) # plink requires p val column to select one SNP per clump
+        d = d[d['maf'] >= float(wildcards.maf)]
+        d.to_csv(output.full, sep='\t', index=False)
+        d[['SNP']].to_csv(output.snplist, header=False, index=False)
+
+
+def getHeaderList(filename, extendlist):
+    with open(filename, 'r') as f:
+        l = f.readline().rstrip().split('\t')
+        l.extend(extendlist)
+        return l
+
+rule getHeaderString:
+    """Get header of file after pruning and proxy fetching from included Snakefile """
+    input:
+        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned_and_proxies.significantfdr{fdr}.maf{maf}.proxy{proxy_r2}.dat"),
+#        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.ld{proxy_r2}.dat"),
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.dat")
+    run:
+        var = '\t'.join(getHeaderList(input.proxyfile, ['cell','annotation']))
+        with open(output[0], 'w') as the_file:
+            the_file.write("{var}\n".format(var=var))
+
+
+rule mergeProxiesWithQTL:
+    input:
+        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "qtl_enrichments/significantfdr{fdr}.maf{maf}.proxy{proxy_r2}.dat"),
+        eqtlfile = rules.formatEqtlFile.output.full, 
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "pruned_and_proxies.significantfdr{fdr}.maf{maf}.proxy{proxy_r2}.dat"),
+    run:
+        d = pandas.read_csv(input.eqtlfile, sep='\t')
+        d.loc[:,'chrom'] = d['chrom'].map(lambda x: f"chr{x}")
+
+        proxy = pandas.read_csv(input.proxyfile, sep='\t', header=None, names=['chrom','start','end','pos'])
+        out = pandas.merge(proxy, d, how="inner", on=['chrom','pos'])
+        out.loc[:,'absoluteEffect'] = out['slope'].map(abs)
+
+        out.to_csv(output.main, sep='\t', index=False)
+
+        
+rule intersectAnnotations:
+    """
+    Intersect annotations with eQTL proxy SNPs
+    eqtlfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.ld{proxy_r2}.dat"),
+    """
+    input:
+        eqtlfile = rules.mergeProxiesWithQTL.output.main,
+        annotations = expand("../data/annotations/{{cell}}.{region}.annotations.bed", region = REGIONS),
+        headerString = rules.getHeaderString.output
+    output:
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "{cell}.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat"),
+        tempout = temp(os.path.join(DIRECTORIES['intermediateFiles'], "{cell}.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat.temp"))
+    shell:
+        r"""
+        for i in {input.annotations}; do b=`basename $i .annotations.bed | sed -e 's:\.:\t:g'`; grep -v chrom {input.eqtlfile} | intersectBed -a - -b $i | awk '{{print $0"\t""'"$b"'"}}' OFS='\t'; done | sort | uniq  > {output.tempout};
+        cat {input.headerString} {output.tempout} > {output.main};
+        """
+    
+rule plot:
+    input:
+        rules.intersectAnnotations.output.main
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.{cell}.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.pdf")
+    params:
+        script = SCRIPTS['plot_raincloud']
+    shell:
+        r""" 
+        Rscript {params.script} {input} {output}
+        """ 
+        
+# rule regress:
+#     input:
+#         rules.intersectAnnotations.output.main
+#     output:
+#         os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.ATACPeaksChromStates.dat"),
+#     params:
+#         script = SCRIPTS['regression']
+#     shell:
+#         r"""
+#         python {params.script} --inputfile {input} --typereg intpeaks > {output};
+#         """
+                                                                    
+# rule setup_powerCalc:
+#     input:
+#         expand(rules.intersectAnnotations.output.main, fdr=0.1, prune_r2=0.8, maf=0.2, proxy_r2=0.99)
+#     output:
+#         os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
+#     run:
+#         d = pandas.read_csv(input[0], sep="\t")
+#         print(d)
+#         d.drop_duplicates(['chrom','snp','annotation'], inplace=True)
+#         d.loc[:,'absoluteEffect'] = abs(d['slope'])
+#         # nd = d.groupby('annotation')['absoluteEffect'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
+#         # nd.to_csv(output[0], sep='\t', index=False)
+#         nd = d.groupby('annotation')['absoluteEffect'].describe(percentiles=numpy.arange(0.1, 0.91, 0.01)).reset_index()
+#         for col in nd.columns:
+#             if col[0].isdigit():
+#                 newcol = round(float(col.replace("%","")),2)
+#                 nd.rename(columns={col:newcol}, inplace=True)
+#         nd.to_csv(output[0], sep='\t', index=False)
+
+
+# rule plot_power:
+#     input:
+#         rules.setup_powerCalc.output
+#     output:
+#         os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
+#     params:
+#         script = SCRIPTS['powerCalc']
+#     shell:
+#         r"""
+#         Rscript {params.script} {input} {output}
+#         """
+                                                                                                                                                        
+
