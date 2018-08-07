@@ -1,0 +1,388 @@
+import os
+import pandas
+import numpy
+
+sampleDF = pandas.read_csv(config['DATA']['sample_info'], sep='\t', header=None, names=['library', 'mark', 'condition', 'cell'])
+
+def getFilename(mark, cell, condition):
+    return sampleDF[(sampleDF['mark'] == mark) & (sampleDF['cell'] == cell) & (sampleDF['condition'] == condition)]['library'].drop_duplicates().tolist()
+    
+def getStates(filename):
+    d = pandas.read_csv(filename, sep='\t', usecols=['new_relabel_to_Roadmap','new_roadmap_state_name'])
+    d.loc[:,'states'] = d.apply(lambda x: "{number}_{name}".format(number = x['new_relabel_to_Roadmap'], name=x['new_roadmap_state_name']), axis=1)
+    d.loc[:,'states'] = d['states'].str.replace("/","_")
+    return d['states'].tolist()
+
+CHROMHMM = config['SCRIPTS']['chromhmm']
+CELLS = config['PARAMETERS']['cell']
+CONDITIONS = config['PARAMETERS']['condition']
+CHROM = list(range(1, 23)) + ['X', 'Y']    
+MARKS = config['PARAMETERS']['marks']
+CONTROL = config['PARAMETERS']['control']
+HISTONE_MARKS = [mark for mark in MARKS if mark != CONTROL]
+# CHROMHMM_FEATURE_SET = config['PARAMETERS']['featureSet']
+INTERMEDIATE_FILES = config['DIRECTORIES']['intermediateFiles']
+FIGURES = config['DIRECTORIES']['figures'] 
+NUMSTATES = range(5, config['PARAMETERS']['numStates'] + 1)
+
+
+
+rule final:
+    """ Learn a ChromHMM model using Islet histone, ATAC-seq and CAGE data """
+    input:
+        html = expand(os.path.join(INTERMEDIATE_FILES, "fastqc/{filename}", "{filename}_{read_pair}_fastqc.html"), filename = sampleDF['library'].tolist(), read_pair = 1),
+        segments = expand(os.path.join(INTERMEDIATE_FILES, "models", "{cell}.{condition}_{numStates}_segments.bed"),
+                          cell = CELLS, condition = CONDITIONS, numStates = NUMSTATES)
+        # phantomPeak = os.path.join(INTERMEDIATE_FILES, "phantomPeakQualTools", "allCorr.scc"),
+        # bed = expand(os.path.join(INTERMEDIATE_FILES, "bamToBed_files", "{cell}.{condition}.{mark}.bed"), cell = CELLS, condition = CONDITIONS, mark = MARKS),
+        # fig =  expand(os.path.join(INTERMEDIATE_FILES, "emissions", "models_{featureSet}_{numStates}.png"), featureSet = featureSet, numStates = range(5, 36)),
+
+
+rule fastqc:
+    """ Run FASTQC """
+    input:
+        fastq = config['DATA']['fastq_files']
+    output:
+        html = os.path.join(INTERMEDIATE_FILES, "fastqc/{filename}", "{filename}_{read_pair}_fastqc.html")
+    params:
+        outputDir = lambda wildcards: os.path.join(INTERMEDIATE_FILES, "fastqc/{filename}")
+    shell:
+        r"""
+        /usr/bin/time -v ionice -c2 -n7 fastqc {input.fastq} -o {params.outputDir}
+        """
+                                                                            
+rule map_bwa:
+    """Map to hg19 using bwa """
+    input:
+        fastq = expand("/lab/data/public/papers/2016_CellResearch_Schmidt_macrophages_histones/{{filename}}_{read_pair}.fastq", read_pair = 1)
+    output:
+        bam = os.path.join(INTERMEDIATE_FILES, "bwa", "{filename}.Aligned.sortedByCoord.out.bam"),
+        counts = os.path.join(INTERMEDIATE_FILES, "counts", "bwa", "{filename}.counts")
+    params:
+        threads = 8,
+        genomeDir = config['DATA']['bwa_genome']
+    shell:
+        r"""
+        bwa mem -t {params.threads} {params.genomeDir} {input.fastq} | samtools sort -@{params.threads} -O BAM -o {output.bam} ; 
+        samtools flagstat {output.bam} > {output.counts}
+        """
+                                                                 
+
+rule merge_removeDuplicates:
+    """ Merge replicates and remove duplicates using samtools (as was done previously) """
+    input:
+        bam = lambda wildcards: expand(rules.map_bwa.output.bam, filename = getFilename(wildcards.mark, wildcards.cell, wildcards.condition))
+    output:
+        merged = temp(os.path.join(INTERMEDIATE_FILES, "merge_rmdup_q30", "{cell}.{condition}.{mark}.merged.bam")),
+        merge_rmdup = temp(os.path.join(INTERMEDIATE_FILES, "merge_rmdup_q30", "{cell}.{condition}.{mark}.merged_rmdup.bam")),
+        counts = os.path.join(INTERMEDIATE_FILES, "merge_rmdup_q30", "{cell}.{condition}.{mark}.counts"),
+        merge_rmdup_q30 = temp(os.path.join(INTERMEDIATE_FILES, "merge_rmdup_q30", "{cell}.{condition}.{mark}.merged_rmdup_q30.bam")),
+    shell:
+        r"""
+        samtools merge  {output.merged} {input} ; 
+        samtools view -c {output.merged} | awk '{{print "{wildcards.mark}\tafter_merge\t"$0"\n"}}' OFS='\t' > {output.counts} ;
+        samtools rmdup -s {output.merged} {output.merge_rmdup} ; 
+        samtools view -c {output.merge_rmdup} | awk '{{print "{wildcards.mark}\tafter_merge_dedup\t"$0"\n"}}' OFS='\t' >> {output.counts} ;
+        samtools view -h -q 30 {output.merge_rmdup} > {output.merge_rmdup_q30} ; 
+        samtools view -c {output.merge_rmdup_q30} | awk '{{print "{wildcards.mark}\tafter_merge_dedup_q30\t"$0"\n"}}' OFS='\t' >> {output.counts} ;
+        """
+
+rule phantomPeakQualTools:
+    """ Computes quick but highly informative enrichment and quality measures and fragment lengths for ChIP-seq/DNase-seq/FAIRE-seq/MNase-seq data
+    Summary
+    This package computes quick but highly informative enrichment and quality measures for ChIP-seq/DNase-seq/FAIRE-seq/MNase-seq data. It can also be used to obtain robust estimates of the predominant fragment length or characteristic tag shift values in these assays.
+    
+    OPTIONAL ARGUMENTS -s=:: , strand shifts at which cross-correlation is evaluated, default=-500:5:1500 -speak=, user-defined cross-correlation peak strandshift -x=:, strand shifts to exclude (This is mainly to avoid region around phantom peak) default=10:(readlen+10) -p= , number of parallel processing nodes, default=0 -    fdr= , false discovery rate threshold for peak calling -npeak=, threshold on number of peaks to call -tmpdir= , Temporary directory (if not specified R function tempdir() is used) -filtchr= , Pattern to use to remove tags that map to specific chromosomes e.g. _ will remove all tags that map to chromosomes with _ in their name
+    
+    OUTPUT ARGUMENTS -odir= name of output directory (If not set same as ChIP file directory is used) -savn= OR -savn NarrowPeak file name (fixed width peaks) -savr= OR -savr RegionPeak file name (variable width peaks with regions of enrichment around peak summits) -savd= OR -savd, save Rdata file -savp= OR -savp, save cross-correlation plot -out=, append peakshift/phantomPeak results to a file -rf, if plot or rdata or narrowPeak file exists replace it. If not used then the run is aborted if the plot or Rdata or narrowPeak file exists -clean, if used it will remove the original chip and control files after reading them in. CAUTION: Use only if the script calling run_spp.R is creating temporary files
+    
+    ===========================
+
+    TYPICAL USAGE
+    (1) Determine strand cross-correlation peak / predominant fragment length OR print out quality measures
+    
+    Rscript run_spp.R -c=<tagAlign/BAMfile> -savp -out=<outFile>
+    -out= will create and/or append to a file named several important characteristics of the dataset. The file contains 11 tab delimited columns
+    
+    COL1: Filename: tagAlign/BAM filename COL2: numReads: effective sequencing depth i.e. total number of mapped reads in input file COL3: estFragLen: comma separated strand cross-correlation peak(s) in decreasing order of correlation. The top 3 local maxima locations that are within 90% of the maximum cross-correlation value are output. In almost all cases, the top (first) value in the list represents the predominant fragment length. If you want to keep only the top value simply run sed -r 's/,[^\t]+//g' > COL4: corr_estFragLen: comma separated strand cross-correlation value(s) in decreasing order (col2 follows the same order) COL5: phantomPeak: Read length/phantom peak strand shift COL6: corr_phantomPeak: Correlation value at phantom peak COL7: argmin_corr: strand shift at which cross-correlation is lowest COL8: min_corr: minimum value of cross-correlation COL9: Normalized strand cross-correlation coefficient (NSC) = COL4 / COL8 COL10: Relative strand cross-correlation coefficient (RSC) = (COL4 - COL8) / (COL6 - COL8) COL11: QualityTag: Quality tag based on thresholded RSC (codes: -2:veryLow,-1:Low,0:Medium,1:High,2:veryHigh)
+    """
+    input:
+        rules.merge_removeDuplicates.output.merge_rmdup_q30
+    output:
+        stats = os.path.join(INTERMEDIATE_FILES, "phantomPeakQualTools", "{cell}.{condition}.{mark}.scc"),
+        plot = os.path.join(INTERMEDIATE_FILES, "phantomPeakQualTools", "{cell}.{condition}.{mark}.merged_rmdup_q30.pdf")
+    params:
+        script = config['SCRIPTS']['phantomPeak'],
+        outDir = os.path.join(INTERMEDIATE_FILES, "phantomPeakQualTools")
+    shell:
+        r"""
+        Rscript {params.script} -c={input} -savp={output.plot} -out={output.stats} -odir={params.outDir}
+        """
+
+rule compile_phantomPeakQualTools:
+    input:
+        expand(rules.phantomPeakQualTools.output, mark = MARKS, cell = CELLS, condition = CONDITIONS)
+    output:
+        os.path.join(INTERMEDIATE_FILES, "phantomPeakQualTools", "allCorr.scc"),
+    shell:
+        r"""
+        echo -e "name\tnumReads\testFragLen\tcorr_estFragLen\tphantomPeak\tcorr_phantomPeak\targmin_corr\tmin_corr\tNSC\tRSC\tQualityTag" | cat - {input} > {output}
+        """
+
+        
+rule plot:
+    input:
+        rules.compile_phantomPeakQualTools.output
+    output:
+        os.path.join(FIGURES, "fig.phantomPeakQualTools.pdf")
+    params:
+        script = config['SCRIPTS']['plot_phantom']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
+
+rule bamToBed:
+    input:
+        rmdup = rules.merge_removeDuplicates.output.merge_rmdup_q30,
+        chromBed = config['DATA']['hg19_chromSizes']
+    output:
+        bed = temp(os.path.join(INTERMEDIATE_FILES, "bamToBed_files", "{cell}.{condition}.{mark}.bed")),
+    shell:
+        r"""
+        samtools view -b {input.rmdup} | bamToBed -i stdin | intersectBed -a - -b {input.chromBed} > {output}
+        """
+                                                                                                                                
+        
+rule bedSubsample:
+    """ Human Histone ChIP-seq data, check median depth. Then subsample """
+    input:
+        rules.bamToBed.output.bed,
+    output:
+        temp(os.path.join(INTERMEDIATE_FILES, "bedFiles_subsampled", "{cell}.{condition}.{mark}.bed")),
+    params:
+        script = config['SCRIPTS']['subsample'],
+        subsample = config['PARAMETERS']['subsample']
+    shell:
+        r"""
+        lines=`zcat {input} | wc -l`; fraction=`echo " {params.subsample} / $lines " | bc -l`; 
+        zcat {input} | perl {params.script} -f $fraction > {output}
+        """
+
+        
+rule makeCellMarksTable:
+    """Make the marks table required for bed binarize with cell name, mark name, mark bedfile and control bedfile """
+    output:
+        main = os.path.join(INTERMEDIATE_FILES, "binarized_poisson", "marksTable.txt")
+    params:
+        cell = CELLS,
+        condition = CONDITIONS,
+        control = CONTROL
+    run:
+        dfs = []
+        for cell in params.cell:
+            for condition in params.condition:
+                oned = pandas.DataFrame({'marks' : HISTONE_MARKS, 'cell':[f"{cell}.{condition}"]*len(HISTONE_MARKS)})
+                dfs.append(oned)
+
+        d = pandas.concat(dfs, ignore_index=True)
+        d.loc[:,'markBed'] = d.apply(lambda x: "{cell}.{m}.bed".format(cell = x['cell'], m = x['marks']), axis=1)
+        d.loc[:,'controlBed'] = d.apply(lambda x: "{cell}.{control}.bed".format(cell = x['cell'], control = params.control), axis=1)
+        d[['cell','marks','markBed','controlBed']].to_csv(output.main, sep='\t', index=False, header=False)
+
+        
+rule binarizeBed_poisson:
+    """ Binarize data to run ChromHMM """
+    input:
+        bedBinarized = expand(os.path.join(INTERMEDIATE_FILES, "bedFiles_subsampled", "{{cell}}.{{condition}}.{mark}.bed"), mark = MARKS),
+        chromLength = config['DATA']['hg19_lengths'],
+        cellMarksTable = rules.makeCellMarksTable.output.main,
+    output:
+        temp(expand(os.path.join(INTERMEDIATE_FILES, "binarized_poisson", "{{cell}}.{{condition}}_chr{chrom}_binary.txt"), chrom=CHROM))
+    params:
+        inputDir = os.path.join(INTERMEDIATE_FILES, "bedFiles_subsampled"),
+        outputDir = os.path.join(INTERMEDIATE_FILES, "binarized_poisson")
+    shell:
+        r"""
+        {CHROMHMM} BinarizeBed -c {params.inputDir} {input.chromLength} {params.inputDir} {input.cellMarksTable} {params.outputDir}
+        """
+        
+                
+rule learnModel:
+    """Learn model using binarized data """
+    input:
+        myfeatures = expand(os.path.join(INTERMEDIATE_FILES, "binarized_poisson", "{cell}.{condition}_chr{chrom}_binary.txt"),
+                            cell = CELLS, chrom = CHROM, condition = CONDITIONS )
+    output:
+        emission = os.path.join(INTERMEDIATE_FILES, "models",
+                                "emissions_{numStates}.txt"),
+        transitions = os.path.join(INTERMEDIATE_FILES, "models",
+                                   "transitions_{numStates}.txt"),
+        model = os.path.join(INTERMEDIATE_FILES, "models",
+                             "model_{numStates}.txt"),
+        segments = expand(os.path.join(INTERMEDIATE_FILES, "models", "{cell}.{condition}_{{numStates}}_segments.bed"),
+                          cell = CELLS, condition = CONDITIONS),
+        # emission_png = os.path.join(INTERMEDIATE_FILES, "models_{featureSet}_{numStates}", "emissions_{numStates}.png"),
+    params:
+        procs = 11,
+        iterations = 2000,
+        inputdir = os.path.join(INTERMEDIATE_FILES, "binarized_data/"),
+        outputdir = os.path.join(INTERMEDIATE_FILES, "models"),
+        assembly = config['PARAMETERS']['assembly']
+    log:
+        os.path.join(INTERMEDIATE_FILES, "logs", "log.learnmodel.{numStates}.txt")
+    shell:
+        """
+        {CHROMHMM} LearnModel -p {params.procs} -r {params.iterations} {params.inputdir} {params.outputdir} {wildcards.numStates} {params.assembly} 1> {log}
+        """
+
+rule compare_models_likelihoods:
+    """Use log-likelihood plot (output from ChromHMM LearnModel to stdout) to help decide how many states to consider """
+    input:
+        log = expand(rules.learnModel.log, numStates = NUMSTATES)
+    output:
+        fig = os.path.join(FIGURES, "models.likelihoods.pdf"), 
+    params:
+        script = config['SCRIPTS']['compile_log_likelihood'],
+    shell:
+        """
+        python {params.script}
+        """
+
+
+rule plot_emissions:
+    """Plot emission probabilies again with own script """
+    input:
+        model = rules.learnModel.output.model,
+    output:
+        fig =  os.path.join(INTERMEDIATE_FILES, "emissions", "models_{numStates}.png")
+    params:
+        plot = config['SCRIPTS']['plot_emission'],
+    shell:
+        """
+        python {params.plot} {input.model} {output.fig} 
+        """
+#####
+# Compare overlap enrichment witg previous state model
+#####
+
+rule make_previous_state_files_for_overlapEnrichment:
+    """Calculate overlap enrichment of new model states with previous states. Make file with list of paths for previous states """
+    input:
+        previous = expand(config['DATA']['pnas_states'], chromatinState = glob_wildcards(config['DATA']['pnas_states'])[0])
+    output:
+        previous_state_files = os.path.join(INTERMEDIATE_FILES, "overlapEnrichments_pnas2017States", "previousStateFiles.txt"),
+    shell:
+        r"""
+        for i in {input}; do b=`basename $i`; echo $b ; done > {output.previous_state_files}
+        """
+
+        
+# rule overlapEnrichment:
+#     input:
+#         new_model =  os.path.join(INTERMEDIATE_FILES, "models_{numStates}", "Islets_{numStates}_segments.bed"),
+#         previous_state_files = rules.make_previous_state_files_for_overlapEnrichment.output.previous_state_files,
+#     output:
+#         overlap_enrich = os.path.join(INTERMEDIATE_FILES, "overlapEnrichments_pnas2017States", "Islets.{featureSet}.{numStates}.txt")
+#     params:
+#         previous_state_dir = config['DATA']['pnas_state_dir'],
+#         outprefix = os.path.join(INTERMEDIATE_FILES, "overlapEnrichments_pnas2017States", "Islets.{featureSet}.{numStates}")
+#     shell:
+#         """
+#         {CHROMHMM} OverlapEnrichment -f {input.previous_state_files} {input.new_model} {params.previous_state_dir} {params.outprefix}
+#         """
+
+        
+# rule plot_overlap_enrichment:
+#     input:
+#         overlap_enrich = rules.overlapEnrichment.output.overlap_enrich
+#     output:
+#         fig = os.path.join(FIGURES, "overlapEnrichment.previousStates", "Islets.{featureSet}.{numStates}.pdf")
+#     script:
+#         config['SCRIPTS']['plot_overlap_enrichment']
+        
+
+# #####
+# # Split chromatin state bed files into separate states to run overlap enrichments on
+# #####
+
+# rule split_states_into_files:
+#     """NOTE: Lambda wildcards cannot be used in output. Dynamic output can be used here, but with two other wildcards snakemake runs the job multiple times
+#     for some reason. Runs into error if the two wildcards are masked in dynamic. Figure this out later. For now, specify one output while the job actually creates many"""
+#     input:
+#         new_model = os.path.join(INTERMEDIATE_FILES, "models_{featureSet}_{numStates}", "Islets_{numStates}_segments.bed"),
+#     output:
+#         chromatinStates = os.path.join(INTERMEDIATE_FILES, "allModels_files_by_chromState", "Islets.{featureSet}.{numStates}model.E{numStates}.bed"),
+#     run:
+#         d = pandas.read_csv(input.new_model, sep='\t', header=None, names=['chrom','start','end','state'])
+
+#         for name, group in d.groupby('state'):
+#             outfilename = os.path.join(INTERMEDIATE_FILES, "allModels_files_by_chromState", f"Islets.{wildcards.featureSet}.{wildcards.numStates}model.{name}.bed")
+#             group.to_csv(outfilename, sep='\t', index=False, header=False)
+
+        
+# rule makeBrowserFiles:
+#     input:
+#         segments = rules.intersect_segmentation_hg19.output.segments_hg19_intersected
+#     output:
+#         dense = os.path.join(DIRECTORIES['intermediateFiles'], "segmentations", "sk-n-sh_13_dense.bed"),
+#         expanded = os.path.join(DIRECTORIES['intermediateFiles'], "segmentations", "sk-n-sh_13_expanded.bed")
+#     params:
+#         segmentation_name = "sk-n-sh_13",
+#         outfilePrefix = os.path.join(DIRECTORIES['intermediateFiles'], "segmentations", "sk-n-sh_13")
+#     shell:
+#         r"""
+#         chromhmm MakeBrowserFiles {input.segments} {params.segmentation_name} {params.outfilePrefix}
+#         """
+
+# rule reorder_roadmap:
+#     input:
+#         browser = rules.makeBrowserFiles.output.dense,
+#         stateInfo = DATA['stateInfo']
+#     output:
+#         reordered = os.path.join(DIRECTORIES['intermediateFiles'], "browser_reorderToRoadmap", "sk-n-sh_13_states.bed"),
+#         states = expand(os.path.join(DIRECTORIES['intermediateFiles'], "states_reorderToRoadmap", "sk-n-sh.{states}.bed"), states = STATES)
+#     run:
+#         dbed = pandas.read_csv(input.browser, sep='\t', skiprows=0, header=None, names=['chrom','start','end','original_state','score','strand','thickStart','thickEnd','color'])
+#         header = "{header}\n".format(header=dbed.iloc[0]['chrom'])
+#         dbed.drop(0, axis=0, inplace=True)
+
+#         dstateInfo = pandas.read_csv(input.stateInfo, sep='\t', usecols=['original_state','new_relabel_to_Roadmap','new_roadmap_state_name','new_color_code'])
+        
+#         d = pandas.merge(dbed, dstateInfo, on=['original_state'], how="left")
+#         d['new_relabel_to_Roadmap'] = d['new_relabel_to_Roadmap'].astype(int)
+#         d.loc[:,'new_relabel_to_Roadmap'] = d.apply(lambda x: "{number}_{name}".format(number = x['new_relabel_to_Roadmap'], name=x['new_roadmap_state_name']), axis=1)
+#         d.loc[:,'new_relabel_to_Roadmap'] = d['new_relabel_to_Roadmap'].str.replace("/", "_")
+#         d = d[['chrom','start','end','new_relabel_to_Roadmap','score','strand','thickStart','thickEnd','new_color_code']]
+#         print(d.head())
+
+#         with open(output.reordered, 'w') as f:
+#             f.write(header)
+#             d.to_csv(f, sep='\t', index=False, header=False, na_rep=" ", float_format='%.f')
+
+#         for name, group in d[['chrom','start','end','new_relabel_to_Roadmap']].groupby('new_relabel_to_Roadmap'):
+#             filename = os.path.join(DIRECTORIES['intermediateFiles'], "states_reorderToRoadmap", "sk-n-sh.{states}.bed".format(states=name))
+#             group[['chrom','start','end']].to_csv(filename, sep='\t', index=False, header=False, float_format='%.f')
+
+# rule bedToBigBed:
+#     input:
+#         bed = rules.reorder_roadmap.output.reordered,
+#         hg19_lengths = DATA['hg19_lengths']
+#     output:
+#         tempfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "browser_reorderToRoadmap", "sk-n-sh_13_states.bed.temp")),
+#         bigbed = os.path.join(DIRECTORIES['intermediateFiles'], "browser_reorderToRoadmap", "sk-n-sh_13_states.bb")
+#     shell:
+#         r"""
+#         sortBed -i {input.bed} > {output.tempfile};
+#         bedToBigBed {output.tempfile} {input.hg19_lengths} {output.bigbed}
+#         """
+        
+# rule callStretchEnhancer:
+#     input:
+#         expand(os.path.join(DIRECTORIES['intermediateFiles'], "states_reorderToRoadmap", "sk-n-sh.{states}.bed"), states = ENHANCER_STATES)
+#     output:
+#         SE = os.path.join(DIRECTORIES['intermediateFiles'], "states_reorderToRoadmap", "sk-n-sh.stretchEnhancer.bed"),
+#     shell:
+#         r"""
+#         cat {input} | sortBed -i - | mergeBed -i - | awk '{{if (( ($3-$2)>=3000 )) print $0}}' OFS='\t' > {output.SE}
+#         """

@@ -1,0 +1,64 @@
+# Run ChromHMM with 4 ChIP-seq + Input for human macrophages
+
+DATA :
+  # To start with bed files converted from bam 
+  fastq_files: "/lab/data/public/papers/2016_CellResearch_Schmidt_macrophages_histones/{filename}_{read_pair}.fastq"
+  sample_info: "/lab/data/public/papers/2016_CellResearch_Schmidt_macrophages_histones/sra_list_marcophages_histone_chipseq.txt"
+  # genome for BWA
+  bwa_genome : "/lab/data/reference/human/hg19/index/bwa/current/hg19"
+  # To take the binarized histone files from PNAS 2017 states
+  hg19_lengths: "/home/arushiv/local/ChromHMM/CHROMSIZES/hg19_concise.txt"
+  hg19_chromSizes: "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/annotations/hg19_chromsizes.bed"
+  pnas_state_dir: "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/"
+  pnas_states: "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/Islets.{chromatinState}.bed"
+
+DIRECTORIES : 
+  data : "data"
+  intermediateFiles : "intermediateFiles/chromhmm_analysis/"
+  scripts : "scripts"
+  figures : "figures/chromhmm_analysis/learnmodels/"
+  
+
+SCRIPTS :
+  # Path to ChromHMM. New files hg19_concise.txt was created in CHROMSIZES of the installtion directory to remove random contigs and chrM. All files of COORDS for hg19 were copied to hg19_concise in the
+  # coords directory
+  chromhmm: "/home/arushiv/local/ChromHMM/chromhmm"
+  subsample: "/home/scjp/src/parker/tools/randomlySampleLines.pl"
+  compile_log_likelihood: "/home/arushiv/erna_analyses/nisc_exploreQTL_parameters/scripts/compile_log_likelihood.py"
+  plot_overlap_enrichment: "/home/arushiv/erna_analyses/nisc_exploreQTL_parameters/scripts/plot.chromhmm.overlap_enrichment.R"
+  plot_emission: "/home/arushiv/erna_analyses/nisc_exploreQTL_parameters/scripts/plot_stateEmissions.py"
+  phantomPeak: "/lab/work/arushiv/sw/phantompeakqualtools/run_spp_nodups.R"
+  plot_phantom: "/lab/work/arushiv/nih_sk-n-sh_chromatinStates/scripts/plot.R"
+  
+PARAMETERS :
+  # Features to add to the chromhmm model
+  features :
+    - 'atac_seq_bed_file'
+    # - 'cage_tag_clusters'
+
+  # # Set of features for each chromhmm model to be added on top of the histone mods
+  # featureSet: 
+  #     histone_atac_tc :
+  #       - 'atac_seq_bed_file'
+  #       - 'cage_tag_clusters'
+      # histone_atac_bidirPairs :
+      #   - 'atac_seq_bed_file'
+      #   - 'cage_bidir_pairs'
+
+ # Depth of subsampling histone ChIP seq data - as used in PNAS 2017
+  subsample : 20000000
+  cell :
+    - "macrophages"
+  condition :
+    - "baseline"
+  marks:
+    - 'Input'
+    - 'H3K4me3'
+    - 'H3K4me1'
+    - 'H3K27ac'
+    - 'H3K27me3'
+  control : "Input"
+  assembly : "hg19_concise"
+
+  # Number of states to run ChromHMM with 
+  numStates : 25
