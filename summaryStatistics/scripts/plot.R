@@ -24,7 +24,15 @@ makePlot <- function(d1, d2, d3){
         geom_bar(position="dodge", stat="identity", width=0.6, colour="black", size=0.3) +
         facet_wrap(~cell, nrow=1) +
         labs(x="Cell type", y="# of segments") +
-        theme(strip.text.x = element_text(size = 6), panel.background = element_rect(fill = 'white', colour='black'), axis.text.x=element_blank(), axis.text=element_text(size=6), panel.grid=element_blank(), legend.key.size=unit(4, "mm"), axis.title=element_text(size=7), axis.title.x=element_blank(), axis.ticks.x=element_blank()) +
+        theme(strip.text.x = element_text(size = 6),
+              panel.background = element_rect(fill = 'white', colour='black'),
+              axis.text.x=element_blank(),
+              axis.text=element_text(size=6),
+              panel.grid=element_blank(),
+              legend.key.size=unit(4, "mm"),
+              axis.title=element_text(size=7),
+              axis.title.x=element_blank(),
+              axis.ticks.x=element_blank()) +
         scale_fill_brewer(name="", palette="Set1", guide=FALSE) 
     
     p2 <- ggplot(d2, aes(annotation,length, fill=annotation)) +
@@ -32,7 +40,15 @@ makePlot <- function(d1, d2, d3){
         geom_boxplot(width=0.1, size=0.1, outlier.size=0.01, outlier.shape=NA) +
         facet_wrap(~cell, nrow=1) +
         labs(x="Annotation", y="Length (bp)") +
-        theme(strip.text.x = element_blank(), panel.background = element_rect(fill = 'white', colour='black'), axis.text.x=element_blank(), axis.text=element_text(size=6), panel.grid=element_blank(), legend.key.size=unit(4, "mm"), axis.title=element_text(size=7), axis.title.x=element_blank(), axis.ticks.x=element_blank()) +
+        theme(strip.text.x = element_blank(),
+              panel.background = element_rect(fill = 'white', colour='black'),
+              axis.text.x=element_blank(),
+              axis.text=element_text(size=6),
+              panel.grid=element_blank(),
+              legend.key.size=unit(4, "mm"),
+              axis.title=element_text(size=7),
+              axis.title.x=element_blank(),
+              axis.ticks.x=element_blank()) +
         scale_fill_brewer(name="", palette="Set1", guide=FALSE) +
         scale_y_log10(breaks=c(100,1000,10000,100000))
     
@@ -40,7 +56,13 @@ makePlot <- function(d1, d2, d3){
         geom_bar(position="dodge", stat="identity", width=0.6, colour="black", size=0.3) +
         facet_wrap(~cell, nrow=1) +
         labs(x="Annotation", y="%genome\ncoverage") +
-        theme(strip.text.x = element_blank(), panel.background = element_rect(fill = 'white', colour='black'), axis.text.x=element_text(size=5.5, angle=60, hjust=1), axis.text.y=element_text(size=4.5), panel.grid=element_blank(), legend.key.size=unit(4, "mm"), axis.title=element_text(size=6)) +
+        theme(strip.text.x = element_blank(),
+              panel.background = element_rect(fill = 'white', colour='black'),
+              axis.text.x=element_text(size=5.5, angle=60, hjust=1),
+              axis.text.y=element_text(size=4.5),
+              panel.grid=element_blank(),
+              legend.key.size=unit(4, "mm"),
+              axis.title=element_text(size=6)) +
         scale_fill_brewer(name="", palette="Set1", guide=FALSE) +
         ylim(0,max(d3$percent_coverage)+0.05)
     
@@ -49,6 +71,19 @@ makePlot <- function(d1, d2, d3){
     return(p)
 }
 
+anovaTest <- function(d){
+    stat <- lm(formula = length ~ annotation, data=d)
+    return(anova(stat))
+
+}
+
+wilcoxTest <- function(d){
+    stat <- pairwise.wilcox.test(d$length, d$annotation, paired=FALSE, p.adjust="bonferroni", na.rm=TRUE)
+    return(stat)
+}
+
+by(d2, d2$cell, anovaTest)
+by(d2, d2$cell, wilcoxTest)
 
 d3$percent_coverage <- (d3$length_annotation/d3$length_genome)*100
 d1 <- renameAnnotations(d1)
