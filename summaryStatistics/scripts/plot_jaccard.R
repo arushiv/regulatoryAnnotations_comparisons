@@ -37,11 +37,6 @@ makePlot_across <- function(d){
         facet_wrap(~feature, nrow=1) +
         labs(x="Feature 1", y="Feature 2") +
         scale_fill_viridis(name="Jaccard") +
-        ## scale_fill_gradientn(colours=c("white","yellow", "red", "darkred"),
-        ##                      values=rescale(colvector),
-        ##                      breaks=c(colvector),
-        ##                      labels=c(round(colvector,2)),
-        ##                      name="Jaccard") +
         theme(strip.text=element_text(size=7),
               text = element_text(size=10),
               axis.text.x = element_text(angle=60, hjust=1, size=8),
@@ -63,11 +58,6 @@ makePlot_same <- function(d){
         facet_wrap(~cell, nrow=1) +
         labs(x="Feature 1", y="Feature 2") +
         scale_fill_viridis(name="Jaccard") +
-        ## scale_fill_gradientn(colours=c("white","yellow", "red", "darkred"),
-        ##                      values=rescale(colvector),
-        ##                      breaks=c(colvector),
-        ##                      labels=c(round(colvector,2)),
-        ##                      name="Jaccard") +
         theme(strip.text=element_text(size=7),
               text = element_text(size=10),
               axis.text.x = element_text(angle=60, hjust=1, size=8),
