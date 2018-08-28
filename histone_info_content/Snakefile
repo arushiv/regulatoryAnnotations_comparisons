@@ -4,6 +4,8 @@ import numpy
 import pybedtools
 import math
 import sys
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 
 include: "../Snakefile_config"
 
@@ -33,12 +35,12 @@ onerror:
 rule final:
     """ Learn a ChromHMM model using Islet histone, ATAC-seq and CAGE data """
     input:
-        information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information_noNorm.{subset}_{stateType}.dat"),
-                             subset = 'fourcells', stateType = ['enhancer','promoter'])
+        fig = expand(os.path.join(FIGURES, "fig.information.GM12878.{subset}_{stateType}.pdf"),
+                     subset = 'fourcells', stateType = ['enhancer','promoter'])
     
 rule makeInputFilelist:
     input:
-        binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM)
+        binarized = expand(config['DATA']['binarized'], cell = SUBSET['fourcells'], chrom = CHROM)
     output:
         inputfilelist = os.path.join(INTERMEDIATE_FILES, "segmentations", "inputfilelist"),
     run:
@@ -50,13 +52,13 @@ rule makeSegmentations:
     """Make ChromHMM Segmentations while also printing posterior probabilities """
     input:
         model = config['DATA']['state13_model'],
-        binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM),
+        binarized = expand(config['DATA']['binarized'], cell = SUBSET['fourcells'], chrom = CHROM),
         inputfilelist = rules.makeInputFilelist.output.inputfilelist
     output:
         posteriors = expand(os.path.join(INTERMEDIATE_FILES, "segmentations/POSTERIOR", "{cell}_13_chr{chrom}_posterior.txt"),
-                            cell = SUBSET['allcells'], chrom = CHROM),
+                            cell = SUBSET['fourcells'], chrom = CHROM),
         segments = temp(expand(os.path.join(INTERMEDIATE_FILES, "segmentations", "{cell}_13_segments.bed"),
-                               cell = SUBSET['allcells'])),
+                               cell = SUBSET['fourcells'])),
     params:
         binarizedDir = "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/bed_binarized/",
         outputDir = os.path.join(INTERMEDIATE_FILES, "segmentations")
@@ -90,7 +92,7 @@ rule getPosteriors:
         tile200bed = rules.make200bpTiles_byChrom.output.tile200bed
     output:
         segmented_posteriors = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.avgPosteriors.txt"),
-        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.information_noNorm.txt")
+        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.information.txt")
     params:
         states = lambda wildcards: ' '.join(stateDict[wildcards.stateType]),
         script = config['SCRIPTS']['calculate_avgPosterior'],
@@ -135,10 +137,10 @@ rule calculate_ESI:
         
 rule concat_information:
     input:
-        information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{{stateType}}.{{subset}}.information_noNorm.txt"),
+        information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{{stateType}}.{{subset}}.information.txt"),
                             cell = CELLS, region = REGIONS , chrom = CHROM)
     output:
-        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information_noNorm.{subset}_{stateType}.dat") 
+        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information.{subset}_{stateType}.dat") 
     run:
         def read(filename):
             try:
@@ -150,4 +152,30 @@ rule concat_information:
         outdf.to_csv(output.information, sep='\t', index=False, na_rep='NA')
         
         
+rule plot:
+    """Plot Information vs Average chromatin state posterior probabilities """
+    input:
+        data = rules.concat_information.output.information,
+        script = DATA['plot_information']
+    output:
+        fig = os.path.join(FIGURES, "fig.information.GM12878.{subset}_{stateType}.pdf")
+    params:
+        cell = "GM12878",
+    run:
+        sys.path.insert(0, os.path.dirname(DATA['plot_information'][0]))
+        from plot_utils import makeGrid
 
+        d = pandas.read_csv(input.data, sep='\t')
+        renameDict = {
+            'broadDomains': "Broad Domains",
+            'hotRegions': "HOT Regions",
+            'stretchEnhancer': "Stretch Enhancers",
+            'superEnhancers': "Super Enhancers",
+            'typicalEnhancers': "Typical Enhancers"
+        }
+
+        dcell = d[d['cell'] == params.cell]
+        dcell.loc[:,'annotation'] = dcell.annotation.map(lambda x: renameDict[x])
+        makeGrid(dcell, 'cell', 'annotation', 'avg_post', 'information', figsize=(15, 3.5),
+                 **{'kind':'hex', 'gridsize':25,'x_label':False, 'y_label':False, 'main_x_label':f"Average {wildcards.stateType}\n State Probability", 'main_y_label':"Information"},
+                 figname=output.fig)   
