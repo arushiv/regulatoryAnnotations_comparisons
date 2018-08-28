@@ -4,8 +4,14 @@ import numpy
 import pybedtools
 import math
 import sys
+import matplotlib
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+
+matplotlib.rcParams['pdf.fonttype'] = 42
+# matplotlib.rcParams['font.family'] = 'sans-serif'
+# matplotlib.rcParams['font.sans-serif'] = "Helevetica"
+
 
 include: "../Snakefile_config"
 
@@ -158,7 +164,8 @@ rule plot:
         data = rules.concat_information.output.information,
         script = DATA['plot_information']
     output:
-        fig = os.path.join(FIGURES, "fig.information.GM12878.{subset}_{stateType}.pdf")
+        fig = os.path.join(FIGURES, "fig.information.GM12878.{subset}_{stateType}.pdf"),
+        fullfig = os.path.join(FIGURES, "fig.information.full.{subset}_{stateType}.pdf")
     params:
         cell = "GM12878",
     run:
@@ -174,8 +181,26 @@ rule plot:
             'typicalEnhancers': "Typical Enhancers"
         }
 
-        dcell = d[d['cell'] == params.cell]
-        dcell.loc[:,'annotation'] = dcell.annotation.map(lambda x: renameDict[x])
-        makeGrid(dcell, 'cell', 'annotation', 'avg_post', 'information', figsize=(15, 3.5),
-                 **{'kind':'hex', 'gridsize':25,'x_label':False, 'y_label':False, 'main_x_label':f"Average {wildcards.stateType}\n State Probability", 'main_y_label':"Information"},
+        # Add pseudocounts for corners so all plots have uniform x axes
+        def getdf(mylist):
+            dtemp = pandas.DataFrame([[0.0, 0.0], [0.0, 2.0], [1.0, 0.0], [1.0, 2.0]], columns=['avg_post', 'information'])
+            dtemp.loc[:,'cell'], dtemp.loc[:,'annotation'] = mylist
+            return dtemp
+
+        dtemp = pandas.concat([getdf(mylist) for mylist in list(d.groupby(['cell', 'annotation']).groups)])
+        dnew = pandas.concat([d, dtemp])
+        dnew.loc[:,'annotation'] = dnew.annotation.map(lambda x: renameDict[x])
+
+        # Make full plot
+        makeGrid(dnew, 'cell', 'annotation', 'avg_post', 'information', figsize=(15, 12),
+                 **{'kind':'hex', 'gridsize':20, 'x_label':False, 'y_label':False,
+                    'main_x_label':f"Average {wildcards.stateType}\n State Probability", 'main_y_label':"Information"},
+                 figname=output.fullfig)   
+
+        # Make GM12878 plot
+        dcell = dnew[dnew['cell'] == params.cell]
+
+        makeGrid(dcell, 'cell', 'annotation', 'avg_post', 'information', figsize=(15, 3),
+                 **{'kind':'hex', 'gridsize':20, 'x_label':False, 'y_label':False,
+                    'main_x_label':f"Average {wildcards.stateType}\n State Probability", 'main_y_label':"Information"},
                  figname=output.fig)   
