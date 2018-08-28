@@ -1,0 +1,184 @@
+import os
+import pandas
+import numpy
+import pybedtools
+import math
+import sys
+
+include: "../Snakefile_config"
+
+def getFilename(mark, cell, condition):
+    return sampleDF[(sampleDF['mark'] == mark) & (sampleDF['cell'] == cell) & (sampleDF['condition'] == condition)]['library'].drop_duplicates().tolist()
+    
+def getStates(filename):
+    d = pandas.read_csv(filename, sep='\t', usecols=['new_relabel_to_Roadmap','new_roadmap_state_name'])
+    d.loc[:,'states'] = d.apply(lambda x: "{number}_{name}".format(number = x['new_relabel_to_Roadmap'], name=x['new_roadmap_state_name']), axis=1)
+    d.loc[:,'states'] = d['states'].str.replace("/","_")
+    return d['states'].tolist()
+
+CHROMHMM = config['SCRIPTS']['chromhmm']
+CELLS = config['PARAMETERS']['cell']
+
+CHROM = list(range(1, 23)) + ['X', 'Y']    
+INTERMEDIATE_FILES = config['DIRECTORIES']['intermediateFiles']
+FIGURES = config['DIRECTORIES']['figures'] 
+
+SUBSET = {
+    'allcells' : ["Adipose","AnteriorCaudate","CD34-PB","ColonicMucosa","endoC","ES-HUES6","GM12878","H1","hASC-t1","hASC-t2","hASC-t3","hASC-t4","HepG2","HMEC","HSMM","Huvec","Islets","K562","Liver","MidFrontalLobe","NHEK","NHLF","RectalMucosa","RectalSmoothMuscle","SkeletalMuscle","StomachSmoothMuscle"],
+    'fourcells' : ['GM12878','H1','HepG2','K562'],
+}
+
+stateDict = {
+    'enhancer' : ['E3','E4','E5','E6'],
+    'promoter' : ['E7','E8','E9','E10']
+}
+
+onsuccess:
+    print("Workflow finished")
+
+onerror:
+    print("An error occurred")
+    shell("""mail -s "an error occurred" arushiv@umich.edu < {log}""")
+
+                    
+
+rule final:
+    """ Learn a ChromHMM model using Islet histone, ATAC-seq and CAGE data """
+    input:
+        information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information_noNorm.{subset}_{stateType}.dat"),
+                             subset = 'fourcells', stateType = ['enhancer','promoter'])
+        # information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{info}_full.dat"),
+        #                      info = ['avgPostriors', 'ESI','subset4_information', 'noSubset_information'])
+
+rule makeInputFilelist:
+    input:
+        binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM)
+    output:
+        inputfilelist = os.path.join(INTERMEDIATE_FILES, "segmentations", "inputfilelist"),
+    run:
+        with open(output.inputfilelist, 'w') as f:
+            for b in input.binarized:
+                f.write("{x}\n".format(x=os.path.basename(b)))
+            
+rule makeSegmentations:
+    input:
+        model = config['DATA']['state13_model'],
+        binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM),
+        inputfilelist = rules.makeInputFilelist.output.inputfilelist
+    output:
+        posteriors = expand(os.path.join(INTERMEDIATE_FILES, "segmentations/POSTERIOR", "{cell}_13_chr{chrom}_posterior.txt"),
+                            cell = SUBSET['allcells'], chrom = CHROM),
+        segments = temp(expand(os.path.join(INTERMEDIATE_FILES, "segmentations", "{cell}_13_segments.bed"),
+                               cell = SUBSET['allcells'])),
+    params:
+        binarizedDir = "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/bed_binarized/",
+        outputDir = os.path.join(INTERMEDIATE_FILES, "segmentations")
+    shell:
+        r"""
+        {CHROMHMM} MakeSegmentation -printposterior -f {input.inputfilelist} {input.model} {params.binarizedDir} {params.outputDir}  ; 
+        """
+
+rule make200bpTiles_byChrom:
+    input:
+        hg19_lengths = config['DATA']['hg19_lengths'],
+    output:
+        tile200bed = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior/200bptiles", "chr{chrom}.200.bed")
+    run:
+        # get indices
+        dchrom = pandas.read_csv(input.hg19_lengths, sep='\t', header=None, names=['chrom','length'])
+        numlines = int(dchrom[dchrom['chrom'] == f"chr{wildcards.chrom}"].iloc[0]['length'] / 200)
+        df = pandas.DataFrame({'start' : numpy.arange(0, 200*numlines, 200)})
+        df.loc[:,'end'] = numpy.arange(200, 200*(numlines + 1), 200)
+        df.loc[:,'chrom'] = f"chr{wildcards.chrom}"
+        df.reset_index(inplace=True)
+        df[['chrom','start','end','index']].to_csv(output.tile200bed, sep='\t', header=False, index=False)
+        
+
+rule getPosteriors:
+    """Get avg posteriors for each feature in an annotation """
+    input:
+        posteriors = lambda wildcards: expand(os.path.join(INTERMEDIATE_FILES, "segmentations/POSTERIOR", "{cell}_13_chr{chrom}_posterior.txt"),
+                                                        cell = SUBSET[wildcards.subset], chrom = wildcards.chrom),
+        annotation = DATA['annotations'],
+        tile200bed = rules.make200bpTiles_byChrom.output.tile200bed
+    output:
+        segmented_posteriors = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.avgPosteriors.txt"),
+        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.information_noNorm.txt")
+        # segmented_posteriors = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.avgPostriors.txt")
+    params:
+        states = lambda wildcards: ' '.join(stateDict[wildcards.stateType]),
+        script = config['SCRIPTS']['calculate_avgPosterior'],
+        replaceString = "_13_chr{chrom}_posterior.txt",
+        cellName = "{cell}",
+        annotName = "{region}",
+        # replaceString = lambda wildcards: "_13_chr{chrom}_posterior.txt".format(chrom = wildcards.chrom)
+    shell:
+        """
+        python {params.script} --inputfiles {input.posteriors} --annotationfile {input.annotation} --tilefile {input.tile200bed} --outputfile {output.segmented_posteriors} --states {params.states} \
+        --cellName {params.cellName} --annotName {params.annotName} --replaceString {params.replaceString} --infoContent_file {output.information}
+        """
+
+rule calculate_ESI:
+    input:
+        posteriors = rules.getPosteriors.output.segmented_posteriors,
+    output:
+        esi = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.ESI.{stateType}.{subset}.txt")
+    run:
+        import sys
+        sys.path.insert(0, '/home/arushiv/toolScripts')
+        from esiScoreAfterMean import calculate_ESI
+        
+        def calc(filename):
+            t = pandas.read_csv(filename, sep='\t')
+            t.loc[:,'avg_post'] = t['avg_posterior']
+            t.set_index(['chrom', 'start', 'end', 'infoContent', 'cell', 'annotation', 'avg_post'], inplace=True)
+            t.rename(columns={'avg_posterior':wildcards.cell}, inplace=True)
+            #print(t.head())
+            out = calculate_ESI(t)
+            out.reset_index(inplace=True)
+            out.loc[:,'ESI'] = out[wildcards.cell]
+            #print(out[['avg_post','GM12878']].head())
+            return out
+
+        try:
+            out = calc(input.posteriors)
+        except pandas.errors.EmptyDataError:
+            out =  pandas.DataFrame()
+
+        out.to_csv(output.esi, sep='\t', index=False, na_rep="NA")
+
+        
+# rule calculate_information:
+#     """Calculate Information content as IC = posterior * (max Entropy - observed Entropy) """
+#     input:
+#         posteriors = rules.getPosteriors.output.segmented_posteriors,
+#     output:
+#         information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{subset}_information.{stateType}.txt")
+#     params:
+#         script = config['SCRIPTS']['calculate_information'],
+#         cell = '{cell}',
+#         subsetCols = lambda wildcards: " --subsetCols {cell}".format(cell = ' '.join(CELLS)) if wildcards.subset == "subset4" else ""
+#     shell:
+#         """
+#         python {params.script} {input.posteriors} {output.information} {params.subsetCols} --cell {params.cell}
+#         """
+
+        
+rule concat_information:
+    input:
+        information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{{stateType}}.{{subset}}.information_noNorm.txt"),
+                            cell = CELLS, region = REGIONS , chrom = CHROM)
+    output:
+        information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information_noNorm.{subset}_{stateType}.dat") 
+    run:
+        def read(filename):
+            try:
+                return pandas.read_csv(filename, sep='\t')
+            except pandas.errors.EmptyDataError:
+                return pandas.DataFrame()
+            
+        outdf = pandas.concat([read(filename) for filename in input.information])
+        outdf.to_csv(output.information, sep='\t', index=False, na_rep='NA')
+        
+        
+
