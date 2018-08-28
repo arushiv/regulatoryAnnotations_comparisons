@@ -1,0 +1,43 @@
+# Run ChromHMM with 4 ChIP-seq + Input for human macrophages
+
+DATA :
+  state13_model: "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/learnModel/states.13/model_13.txt"
+  # To take the binarized histone files from PNAS 2017 states
+  hg19_lengths: "/home/arushiv/local/ChromHMM/CHROMSIZES/hg19_concise.txt"
+  hg19_chromSizes: "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/annotations/hg19_chromsizes.bed"
+  pnas_state_dir: "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/"
+  pnas_states: "/lab/work/arushiv/newhuman_datasets_by_13chromatinStates/{cell}.{annotation}.bed"
+  binarized: "/lab/work/arushiv/chromatin/integrativeAnalysis_Chromhmm/bed_binarized/{cell}_chr{chrom}_binary.txt.gz"
+  
+DIRECTORIES : 
+  data : "data"
+  intermediateFiles : "intermediateFiles/"
+  scripts : "scripts"
+  figures : "figures/chromhmm_analysis/learnmodels/"
+  
+
+SCRIPTS :
+  # Path to ChromHMM. New files hg19_concise.txt was created in CHROMSIZES of the installtion directory to remove random contigs and chrM. All files of COORDS for hg19 were copied to hg19_concise in the
+  # coords directory
+  chromhmm: "/home/arushiv/local/ChromHMM/chromhmm"
+  calculate_avgPosterior: "scripts/calculate_avgPosteriors.py"
+  calculate_information: "scripts/calculateInformation.py"
+
+PARAMETERS :
+  cell :
+    - "GM12878"
+    - "HepG2"
+    - "K562"
+    - "H1"
+    
+  marks:
+    - 'WCE'
+    - 'H3K4me3'
+    - 'H3K4me1'
+    - 'H3K27ac'
+    - 'H3K27me3'
+  control : "WCE"
+  assembly : "hg19_concise"
+
+  # Number of states to run ChromHMM with 
+  numStates : 13
