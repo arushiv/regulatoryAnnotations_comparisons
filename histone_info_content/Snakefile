@@ -7,15 +7,6 @@ import sys
 
 include: "../Snakefile_config"
 
-def getFilename(mark, cell, condition):
-    return sampleDF[(sampleDF['mark'] == mark) & (sampleDF['cell'] == cell) & (sampleDF['condition'] == condition)]['library'].drop_duplicates().tolist()
-    
-def getStates(filename):
-    d = pandas.read_csv(filename, sep='\t', usecols=['new_relabel_to_Roadmap','new_roadmap_state_name'])
-    d.loc[:,'states'] = d.apply(lambda x: "{number}_{name}".format(number = x['new_relabel_to_Roadmap'], name=x['new_roadmap_state_name']), axis=1)
-    d.loc[:,'states'] = d['states'].str.replace("/","_")
-    return d['states'].tolist()
-
 CHROMHMM = config['SCRIPTS']['chromhmm']
 CELLS = config['PARAMETERS']['cell']
 
@@ -24,7 +15,6 @@ INTERMEDIATE_FILES = config['DIRECTORIES']['intermediateFiles']
 FIGURES = config['DIRECTORIES']['figures'] 
 
 SUBSET = {
-    'allcells' : ["Adipose","AnteriorCaudate","CD34-PB","ColonicMucosa","endoC","ES-HUES6","GM12878","H1","hASC-t1","hASC-t2","hASC-t3","hASC-t4","HepG2","HMEC","HSMM","Huvec","Islets","K562","Liver","MidFrontalLobe","NHEK","NHLF","RectalMucosa","RectalSmoothMuscle","SkeletalMuscle","StomachSmoothMuscle"],
     'fourcells' : ['GM12878','H1','HepG2','K562'],
 }
 
@@ -38,18 +28,14 @@ onsuccess:
 
 onerror:
     print("An error occurred")
-    shell("""mail -s "an error occurred" arushiv@umich.edu < {log}""")
-
-                    
+                       
 
 rule final:
     """ Learn a ChromHMM model using Islet histone, ATAC-seq and CAGE data """
     input:
         information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "information_noNorm.{subset}_{stateType}.dat"),
                              subset = 'fourcells', stateType = ['enhancer','promoter'])
-        # information = expand(os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{info}_full.dat"),
-        #                      info = ['avgPostriors', 'ESI','subset4_information', 'noSubset_information'])
-
+    
 rule makeInputFilelist:
     input:
         binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM)
@@ -61,6 +47,7 @@ rule makeInputFilelist:
                 f.write("{x}\n".format(x=os.path.basename(b)))
             
 rule makeSegmentations:
+    """Make ChromHMM Segmentations while also printing posterior probabilities """
     input:
         model = config['DATA']['state13_model'],
         binarized = expand(config['DATA']['binarized'], cell = SUBSET['allcells'], chrom = CHROM),
@@ -104,14 +91,12 @@ rule getPosteriors:
     output:
         segmented_posteriors = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.avgPosteriors.txt"),
         information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{stateType}.{subset}.information_noNorm.txt")
-        # segmented_posteriors = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.avgPostriors.txt")
     params:
         states = lambda wildcards: ' '.join(stateDict[wildcards.stateType]),
         script = config['SCRIPTS']['calculate_avgPosterior'],
         replaceString = "_13_chr{chrom}_posterior.txt",
         cellName = "{cell}",
         annotName = "{region}",
-        # replaceString = lambda wildcards: "_13_chr{chrom}_posterior.txt".format(chrom = wildcards.chrom)
     shell:
         """
         python {params.script} --inputfiles {input.posteriors} --annotationfile {input.annotation} --tilefile {input.tile200bed} --outputfile {output.segmented_posteriors} --states {params.states} \
@@ -146,22 +131,6 @@ rule calculate_ESI:
             out =  pandas.DataFrame()
 
         out.to_csv(output.esi, sep='\t', index=False, na_rep="NA")
-
-        
-# rule calculate_information:
-#     """Calculate Information content as IC = posterior * (max Entropy - observed Entropy) """
-#     input:
-#         posteriors = rules.getPosteriors.output.segmented_posteriors,
-#     output:
-#         information = os.path.join(INTERMEDIATE_FILES, "calculate_avg_posterior", "{cell}.{region}.chr{chrom}.{subset}_information.{stateType}.txt")
-#     params:
-#         script = config['SCRIPTS']['calculate_information'],
-#         cell = '{cell}',
-#         subsetCols = lambda wildcards: " --subsetCols {cell}".format(cell = ' '.join(CELLS)) if wildcards.subset == "subset4" else ""
-#     shell:
-#         """
-#         python {params.script} {input.posteriors} {output.information} {params.subsetCols} --cell {params.cell}
-#         """
 
         
 rule concat_information:
