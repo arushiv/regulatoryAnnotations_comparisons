@@ -23,7 +23,18 @@ makeEcdfPlot <- function(d){
         geom_line(aes(colour = annotation), size=0.5) +
         facet_wrap(~cell, nrow=1) +
         labs(y="Fraction", x="log10(Distance(bp) + 1)") +
-        theme(strip.text.x = element_text(size = 8), panel.background = element_rect(fill = 'white', colour='black'), axis.text.x=element_text(size=8), axis.text.y=element_text(size=8), axis.title=element_text(size=7), text=element_text(size=8), panel.grid=element_blank(), legend.position="bottom", legend.key.size=unit(7,"mm")) +
+        theme(strip.text.x = element_text(size = 8),
+              panel.background = element_rect(fill = 'white', colour='black'),
+              axis.text.x=element_text(size=8),
+              axis.text.y=element_text(size=8),
+              axis.title=element_text(size=7),
+              text=element_text(size=8),
+              panel.grid.major.x=element_line(colour="grey", linetype="dashed", size=0.1),
+              panel.grid.major.y=element_line(colour="grey", linetype="dashed", size=0.1),
+              legend.position="bottom",
+              legend.key=element_rect(fill="white", colour="black"),
+              legend.key.size=unit(7,"mm"),
+              strip.background=element_rect(fill="white", colour="black")) +
         scale_colour_brewer(palette="Set1", name="") 
     return(p)
 
