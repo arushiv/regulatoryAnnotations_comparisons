@@ -14,7 +14,7 @@ DIRECTORIES :
 DATA :
   input_snps : "intermediateFiles/pruned0.2.{trait}.txt"
   output : "enrichment_stats.txt"
-  output_fig : "fig.gwas_enrichment.pdf"
+  output_fig : "fig.gwas_enrichment_nhgri.pdf"
   
 PARAMETERS : 
   gregor_version_path : "/lab/sw/modules/GREGOR/1.2.1/script/GREGOR.pl"
@@ -25,9 +25,10 @@ PARAMETERS :
   nameFieldSeparator: '.'
   jobFieldSeparator : '.'
   header : "trait ld ldr2 cell annotation feature overlap expected_overlap pval"
+  minOverlap : 3
   
 SCRIPTS : 
-  makeConfFile : "/home/arushiv/toolScripts/gregor_makeConf.py"
-  assembleDF : "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py"
-  plot : "scripts/plot.R"
+  makeConfFile : "scripts/gregor_makeConf.py"
+  assembleDF : "scripts/makeDataFrame_gregor_new.py"
+  plot : "scripts/plotScatter.R"
 

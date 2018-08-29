@@ -7,70 +7,14 @@ import re
 
 include: "../Snakefile_config"
 
-DATA.update({'nhgri_gwas': "/lab/data/gwas/2018_06_NHGRI_EBI_Catalog_download/gwas_catalog_v1.0.2-associations_e92_r2018-05-29.tsv"})
-
 GREGOR_DIR = config['DIRECTORIES']['gregor_dir']
 GREGOR_outputDir = os.path.join(GREGOR_DIR, config['DIRECTORIES']['output_dir'])
 ANNOTATIONS = DATA['annotations']
 GREGOR_CONFIG_NAME = config['PARAMETERS']['config_name']
 GREGOR_output_figure = os.path.join(config['DIRECTORIES']['figures'], config['DATA']['output_fig'])
 
-SCRIPTS = {
-    'pruningScript' : "scripts/pruneVariantsAndFilterMaf_1000gNCIPortal.py",
-    'makeConfFile' : "scripts/gregor_makeConf.py",
-    'proxyFromGREGOR' : "scripts/gregorOutputCompileLdSnps.py",
-    'plot' : "scripts/plot.R"
-}
-
 CHROM = list(range(1, 23))
-
-
-def select_traits(nhgri_gwas, ancestry, minN):
-    d = pandas.read_csv(nhgri_gwas, sep='\t',
-                        usecols=['LINK', 'DISEASE/TRAIT', 'INITIAL SAMPLE SIZE',
-                                 'REPLICATION SAMPLE SIZE', 'CHR_ID', 'CHR_POS', 'SNPS',
-                                 'MERGED', 'RISK ALLELE FREQUENCY', 'P-VALUE', 'PVALUE_MLOG',
-                                 'OR or BETA', '95% CI (TEXT)','MAPPED_TRAIT']).drop_duplicates()
-    d.dropna(subset=['SNPS'], axis=0, inplace=True)
-
-    """Subest for European ancestry"""
-
-    d = d[d['INITIAL SAMPLE SIZE'].str.contains(ancestry)]
-    
-    nd = pandas.DataFrame(d.groupby(['DISEASE/TRAIT'])['DISEASE/TRAIT'].size())
-    traits = nd[nd['DISEASE/TRAIT'] >= minN]['DISEASE/TRAIT'].index.tolist()
-    d = d[d['DISEASE/TRAIT'].isin(traits)]
-
-    d.rename(columns={'SNPS' : 'SNP', 'CHR_ID' : 'chrom', 'P-VALUE' : 'P', 'DISEASE/TRAIT' : 'trait'}, inplace=True)
-
-    d.loc[:,'SNP'] = d['SNP'].map(lambda x: re.split(';|,', x)[0])
-    d.loc[:,'SNP'] = d['SNP'].map(lambda x: x.rstrip())
-
-
-    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'/.+', '', x))
-    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r',.+', '', x))
-    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'\(.+\)', '', x))
-
-    d.loc[:, 'trait'] = d['trait'].str.replace("Body mass index", "BMI")
-    keys = ['Hip circumference', 'Waist-to-hip ratio', 'Waist circumference', 'High light scatter reticulocyte',
-                    'Post bronchodilator FEV1', 'Platelet', 'Mean corpuscular hemoglobin', 'BMI',
-                    'Neutrophil', 'Eosinophil', 'Granulocyte']
-
-    def fix(x):
-        for key in keys:
-            if x.startswith(key):
-                return key
-        return x
-        
-    d.loc[:, 'trait'] = d['trait'].map(fix)
-    d.loc[:, 'trait'] = d['trait'].map(lambda x: x.rstrip())
-    d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub("'|,|\(| ", "_", x))
-
-    # print(d['trait'].drop_duplicates().tolist())
-    return d
-
-d_selected_traits = select_traits(DATA['nhgri_gwas'], 'European', 100)
-# TRAITS = glob_wildcards(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"))[0]
+TRAITS = ["BMI","Celiac_disease","Crohn_s_disease","Type_1_diabetes","Type_2_diabetes","Rheumatoid_arthritis","Systemic_lupus_erythematosus"]
 
 rule final:
     """
@@ -79,26 +23,74 @@ rule final:
     2. Run GREGOR enrichment
     """
     input:
-        stats = dynamic(expand(os.path.join(GREGOR_DIR, "output_{{trait}}.ld{gregor_r2}", "StatisticSummaryFile.txt"),
-                               gregor_r2 = config['PARAMETERS']['gregor_r2'])),
         fig = GREGOR_output_figure
-        # vcf = os.path.join(config['output_directory'], "myfile.selected.recode.vcf.gz"),
-        # inputfile = expand(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"), trait=TRAITS) #rules.setup_eqtl_for_pruning.output.full
-
         
 
 rule makeFullSnpList_forPruning:
     """Make full SNP list to subset vcf files once """
+    input:
+        nhgri_gwas = DATA['nhgri_gwas']
     output:
-        main = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "full_snp_list.txt")
+        main = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "full_snp_list.txt"),
+        full = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "nhgri_gwas.dat"),
+        reference_table = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "gwas_reference.xlsx"),
+    params:
+        ancestry = "European",
+        minN = 100,
     run:
-        d_selected_traits['SNP'].drop_duplicates().to_csv(output.main, index=False, header=False)
+        d = pandas.read_csv(input.nhgri_gwas, sep='\t',
+                            usecols=['DATE ADDED TO CATALOG', 'PUBMEDID', 'FIRST AUTHOR', 'DATE', 'JOURNAL',
+                                     'STUDY', 'LINK', 'DISEASE/TRAIT', 'INITIAL SAMPLE SIZE',
+                                     'REPLICATION SAMPLE SIZE', 'CHR_ID', 'CHR_POS', 'SNPS',
+                                     'MERGED', 'RISK ALLELE FREQUENCY', 'P-VALUE', 'PVALUE_MLOG',
+                                     'OR or BETA', '95% CI (TEXT)','MAPPED_TRAIT']).drop_duplicates()
+        d.dropna(subset=['SNPS'], axis=0, inplace=True)
+
+        """Subest for European ancestry"""
+
+        d = d[d['INITIAL SAMPLE SIZE'].str.contains(params.ancestry)]
+    
+        nd = pandas.DataFrame(d.groupby(['DISEASE/TRAIT'])['DISEASE/TRAIT'].size())
+        traits = nd[nd['DISEASE/TRAIT'] >= params.minN]['DISEASE/TRAIT'].index.tolist()
+        d = d[d['DISEASE/TRAIT'].isin(traits)]
+        
+        d.rename(columns={'SNPS' : 'SNP', 'CHR_ID' : 'chrom', 'P-VALUE' : 'P', 'DISEASE/TRAIT' : 'trait'}, inplace=True)
+
+        d.loc[:,'SNP'] = d['SNP'].map(lambda x: re.split(';|,', x)[0])
+        d.loc[:,'SNP'] = d['SNP'].map(lambda x: x.rstrip())
+
+
+        d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'/.+', '', x))
+        d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r',.+', '', x))
+        d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub(r'\(.+\)', '', x))
+
+        d.loc[:, 'trait'] = d['trait'].str.replace("Body mass index", "BMI")
+        keys = ['Hip circumference', 'Waist-to-hip ratio', 'Waist circumference', 'High light scatter reticulocyte',
+                'Post bronchodilator FEV1', 'Platelet', 'Mean corpuscular hemoglobin', 'BMI',
+                'Neutrophil', 'Eosinophil', 'Granulocyte']
+
+        def fix(x):
+            for key in keys:
+                if x.startswith(key):
+                    return key
+            return x
+        
+        d.loc[:, 'trait'] = d['trait'].map(fix)
+        d.loc[:, 'trait'] = d['trait'].map(lambda x: x.rstrip())
+        d.loc[:, 'trait'] = d['trait'].map(lambda x: re.sub("'|,|\(| ", "_", x))
+        d = d[d['trait'].isin(TRAITS)]
+        d.to_csv(output.full, sep='\t', index=False)
+        d[['DATE ADDED TO CATALOG', 'PUBMEDID', 'FIRST AUTHOR', 'DATE', 'JOURNAL', 'LINK', 'STUDY', 'trait', 'INITIAL SAMPLE SIZE']].drop_duplicates().to_excel(output.reference_table)
+        d['SNP'].drop_duplicates().to_csv(output.main, index=False, header=False)
 
 
 rule make_trait_files:
+    input:
+        full = rules.makeFullSnpList_forPruning.output.full,
     output:
         main = dynamic(os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", "selected.{trait}.dat"))
     run:
+        d_selected_traits = pandas.read_csv(input.full, sep='\t')
         for trait, group in d_selected_traits.groupby('trait'):
             filename = os.path.join(DIRECTORIES['intermediateFiles'], "traits_pruning", f"selected.{trait}.dat")
             group[['SNP', 'P']].to_csv(filename, sep='\t', index=False, na_rep="NA")
@@ -238,7 +230,7 @@ rule runGREGOR:
     output:
         stats = os.path.join(GREGOR_outputDir, "StatisticSummaryFile.txt")
     params:
-        gregor_version_path = config['PARAMETERS']['gregor_version_path']
+        gregor_version_path = GREGOR_SCRIPT_PATH
     shell:
         r"""
         ionice -c2 -n7 {params.gregor_version_path} --conf {input.conf}
