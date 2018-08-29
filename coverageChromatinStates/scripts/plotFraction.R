@@ -15,9 +15,9 @@ renameAnnotations <- function(d){
 }
 
 makePlot <- function(d){
-    p <- ggplot(d, aes(x = cell1, y=fraction, fill=chromatinState)) +
+    p <- ggplot(d, aes(x = cell2, y=fraction, fill=chromatinState)) +
         geom_bar(colour = "black", stat = "identity") +
-        facet_grid(cell2 ~ annotation, labeller = label_wrap_gen()) +
+        facet_grid(cell1 ~ annotation, labeller = label_wrap_gen()) +
         theme(axis.text = element_text(size=7),
           text = element_text(size=7),
           panel.background = element_rect(fill = 'white', colour = 'black'),
@@ -28,7 +28,7 @@ makePlot <- function(d){
           axis.title=element_text(size=9),
           strip.background=element_rect(fill="white", colour="black")) +
         scale_fill_manual(values = colvector, guide = guide_legend(reverse = TRUE), name="Chromatin States") +
-        labs(x = "Annotations defined in cell type",
+        labs(x = "Chromatin States defined in cell type",
              y = "Fraction of annotations overlapped by chromatin states")
     return(p)
 }
@@ -64,10 +64,10 @@ colvector <- rev(c(rgb(255,0,0,maxColorValue=255),
                    rgb(192,192,192,maxColorValue=255),
                    rgb(255,255,255,maxColorValue=255)))
 
-## d$cell1 <- paste(d$cell1, "annotations", sep=" ")
-d$cell2 <- paste(d$cell2, "chromatin states", sep=" ")
-## d$cell2 <- factor(d$cell2, levels = rev(c("K562","HepG2","H1","GM12878")))
-## d$cell1 <- factor(d$cell1, levels = c("K562","HepG2","H1","GM12878"))
+d$cell1 <- paste(d$cell1, "annotations", sep=" ")
+## d$cell2 <- paste(d$cell2, "chromatin states", sep=" ")
+d$cell2 <- factor(d$cell2, levels = c("K562","HepG2","H1","GM12878"))
+d$cell1 <- factor(d$cell1, levels = c("K562 annotations","HepG2 annotations","H1 annotations","GM12878 annotations"))
 d <- renameAnnotations(d)
 
 pdf(snakemake@output[[1]], height = 8, width = 7)
