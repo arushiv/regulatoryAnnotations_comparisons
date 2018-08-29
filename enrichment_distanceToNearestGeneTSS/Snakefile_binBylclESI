@@ -23,8 +23,6 @@ config = {
     'threads' : 200
 }
 
-newfile = "../data/reference/newTssPClist.bed"
-
 rule final:
     """
     Workflow to compute enrichment for distance to nearest protein coding gene TSS for annotations after binning by LCL ESI 
@@ -38,7 +36,7 @@ rule getGencodeTss:
     """
     input:
         geneList = getESI("intermediateFiles/GTEx_v6p.ESI_medianTPM_min0.15.dat"),
-        gencode_annotation = newfile
+        gencode_annotation = DATA['pc_gene_list']
     output:
         filesByBin = expand(os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.LclESIbin{binNumber}.bed"), binNumber = range(1, (PARAMETERS['bins'] + 1))),
         fileFullGeneSet = os.path.join(DIRECTORIES['intermediateFiles'], "gencodeTSS.allLclESIGenes.bed")

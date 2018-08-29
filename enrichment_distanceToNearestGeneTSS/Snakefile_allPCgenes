@@ -15,21 +15,20 @@ PARAMETERS = {
     'cellName' : "Cells - EBV-transformed lymphocytes",
 }
 
-newfile = "../data/reference/newTssPClist.bed"
-
 rule final:
     """
     Workflow to compute distance to nearest gene TSS (for genes that have ESI defined) for annotations
     """
     input:
         os.path.join(DIRECTORIES['figures'], "fig.nearestDist_ECDF1.pdf"),
-        
+
+    
 rule getNearestDistance_andECDF:
     """
     Calculate ECDF for distance to nearest gene TSS information
     """
     input:
-        tssFile = newfile,
+        tssFile = DATA['pc_gene_list'],
         annotations = expand(DATA['annotations'], cell = CELLS, region = REGIONS)
     output:
         os.path.join(DIRECTORIES['intermediateFiles'], "annotations_nearestDistToTss.ECDF_1.dat")
