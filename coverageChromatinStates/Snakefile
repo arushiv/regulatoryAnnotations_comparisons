@@ -3,7 +3,7 @@ import os
 include: "../Snakefile_config"
 
 SCRIPTS = {
-    'plot' : "scripts/plot.R",
+    'plot' : "scripts/plotFraction.R",
 }
 
 rule final:
