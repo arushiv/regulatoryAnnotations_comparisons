@@ -19,10 +19,10 @@ write.table(read.table(text = unlist(lapply(unique(d$cell), function(i){
     lapply(unique(d1$annotation), function(j){
         d2 <- subset(d1, annotation == j)
         print(d2)
-        print(paste(i,j,cor(as.numeric(d2$bin), d2$enrichment), sep='\t'))
-        ## return(i,j,cor(as.numeric(d2$bin), d2$log2_enrichment, method="spearman"))
+        t = cor.test(as.numeric(d2$bin), d2$enrichment)
+        print(paste(i, j, t$estimate, t$p.value, sep='\t'))
     })
-}), use.names=FALSE)), args[2], sep="\t", quote=FALSE, row.names=FALSE, col.names=c("cell","annotation","correlation"))
+}), use.names=FALSE)), args[2], sep="\t", quote=FALSE, row.names=FALSE, col.names=c("cell", "annotation", "correlation", "corr_pval"))
 
 
 
