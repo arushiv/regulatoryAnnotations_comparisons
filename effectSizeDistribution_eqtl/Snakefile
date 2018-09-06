@@ -35,12 +35,12 @@ rule final:
     7. Perform regression
     """
     input:
-        effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
-        effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
-               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
-        regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
-               fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
-        powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
+        powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf"),
+        # effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
+        # effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
+        #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        # regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+        #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
 
     
 rule formatEqtlFile:
