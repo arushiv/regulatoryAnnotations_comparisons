@@ -2,9 +2,12 @@
 data/
 figures/
 intermediateFiles/
+intermediateFiles_old/
 logs/
 .snakemake/
 .ipynb_checkpoints/
 .drmr/
 gregorRun/
 __pycache__/
+SeabornCustomGrid/
+regression/
