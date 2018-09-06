@@ -18,7 +18,10 @@ LINKS = {
     'dbsnp150' : "ftp://ftp.ncbi.nih.gov/snp/organisms/human_9606_b150_GRCh37p13/VCF/common_all_20170710.vcf.gz",
     '1000g' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
     '1000g_index' : "ftp://ftp.1000genomes.ebi.ac.uk/vol1/ftp/release/20130502/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
-    'vcf_sampleInfo' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/igsr.tsv.gz"
+    'vcf_sampleInfo' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/igsr.tsv.gz",
+    'plot_information' : "git@github.com:arushiv/SeabornCustomGrid.git",
+    'nhgri_gwas' : "https://www.ebi.ac.uk/gwas/api/search/downloads/alternative",
+    'pc_gene_list' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/tsslist_gencodev19_pc.bed",
 }
 
 DATA = {
@@ -26,7 +29,7 @@ DATA = {
     'chromatinStates' : os.path.join(BASE_PATH,  "data/chromatinStates/{cell}.{chromatinState}.bed"),
     'workspace' : os.path.join(BASE_PATH, "data/reference/hg19_chromsizes.bed"),
     'gencode_annotation' : os.path.join(BASE_PATH, "data/reference/gencode.v19.tssUniq.annotation.bed.gz"),
-    'pc_gene_list' : os.path.join(BASE_PATH, "data/reference/PC_gene_list.txt"),
+    'pc_gene_list' : os.path.join(BASE_PATH, "data/reference/tsslist_gencodev19_pc.bed"),
     'gtex_expression' : os.path.join(BASE_PATH, "data/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz"),
     'gtex_eqtl' : "/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
     'dsqtl' : os.path.join(BASE_PATH, "data/qtlEffects/dsQtlTable.txt.gz"),
@@ -39,6 +42,8 @@ DATA = {
     '1000g' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
     '1000g_index' : "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz.tbi",
     'vcf_sampleInfo' : os.path.join(BASE_PATH,  "data/1000g/igsr.tsv.gz"),
+    'plot_information' : expand(os.path.join(BASE_PATH, "histone_info_content/scripts/SeabornCustomGrid", "{script}.py"), script=["plot_utils", "faceted_jointplots"]),
+    'nhgri_gwas' : os.path.join(BASE_PATH,  "data/gwas", "gwas_catalog_v1.0.2-associations_e92_r2018-05-29.tsv"),
 }
 
 DIRECTORIES = {
@@ -64,7 +69,7 @@ rule download_annotations:
         outname = os.path.join(BASE_PATH, "data/annotations/{cell}.{region}.annotations.bed.gz")
     shell:
         """
-        wget {params.link} -O {params.outname} ;
+        wget --no-check-certificate {params.link} -O {params.outname} ;
         gunzip {params.outname}
         """
 
@@ -76,7 +81,7 @@ rule download_chromatinStates:
         link = LINKS['chromatinStates']
     run:
         shell(r"""
-        wget {params.link} -O {output.gzip}
+        wget --no-check-certificate {params.link} -O {output.gzip}
         """)
         d = pandas.read_csv(output.gzip, sep='\t', header=None, names=['chrom','start','end','chromatinState','colorCode'])
         for name, group in d.groupby('chromatinState'):
@@ -90,20 +95,20 @@ rule download_workspace:
     params:
         link = LINKS['workspace']
     shell:
-        """wget {params.link} -O {output} """
+        """wget --no-check-certificate {params.link} -O {output} """
 
-rule download_gencodeAnnotation:
-    output:
-        tempAnnot = temp(os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz")),
-        pc_gene_list = DATA['pc_gene_list'],
-        annot = DATA['gencode_annotation']
-    params:
-        link = LINKS['gencode_annotation'],
-    run:
-        shell(r"""
-        wget {params.link} -O {output.tempAnnot} ;
-        zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.pc_gene_list}
-        """)
+# rule download_gencodeAnnotation:
+#     output:
+#         tempAnnot = temp(os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz")),
+#         pc_gene_list = DATA['pc_gene_list'],
+#         annot = DATA['gencode_annotation']
+#     params:
+#         link = LINKS['gencode_annotation'],
+#     run:
+#         shell(r"""
+#         wget {params.link} -O {output.tempAnnot} ;
+#         zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.pc_gene_list}
+#         """)
         
 rule download_1000g:
     output:
@@ -134,7 +139,7 @@ rule download_gtexEqtl:
     params:
         link = LINKS['gtex_eqtl']
     shell:
-        """wget {params.link} -O {output} """
+        """wget --no-check-certificate {params.link} -O {output} """
         
 rule download_gtexExpression:
     output:
@@ -142,7 +147,7 @@ rule download_gtexExpression:
     params:
         link = LINKS['gtex_expression']
     shell:
-        """wget {params.link} -O {output}"""
+        """wget --no-check-certificate {params.link} -O {output}"""
         
 rule download_dsqtl:
     output:
@@ -174,6 +179,38 @@ rule download_gmAllelicBias:
         gm_expected_deviation = LINKS['gm_expected_deviation']
     shell:
         """
-        wget {params.gm_allelic_bias} -O {output.gm_allelic_bias} ;
-        wget {params.gm_expected_deviation} -O {output.gm_expected_deviation} ;
+        wget --no-check-certificate {params.gm_allelic_bias} -O {output.gm_allelic_bias} ;
+        wget --no-check-certificate {params.gm_expected_deviation} -O {output.gm_expected_deviation} ;
+        """
+
+rule get_scripts_to_plot_information_content:
+    output:
+        plot_information = DATA['plot_information'],
+    params:
+        directory = os.path.dirname(DATA['plot_information'][0]),
+        plot_information = LINKS['plot_information']
+    shell:
+        """
+        git clone {params.plot_information} {params.directory}
+        """
+
+rule get_nhgri_gwas:
+    output:
+        nhgri_gwas = DATA['nhgri_gwas']
+    params:
+        nhgri_gwas = LINKS['nhgri_gwas']
+    shell:
+        """
+        wget {params.nhgri_gwas} -O {output.nhgri_gwas}
+        """
+        
+rule download_tss_pc_gene_list:
+    """Download TSS list for Protein Coding genes """
+    output:
+        pc_gene_list = DATA['pc_gene_list']
+    params:
+        pc_gene_list = LINKS['pc_gene_list']
+    shell:
+        """
+        wget --no-check-certificate {params.pc_gene_list} -O {output.pc_gene_list}
         """
