@@ -34,15 +34,16 @@ makePlot <- function(d, colname, n){
 d <- d[, !(names(d) %in% c('min','max','std','mean','X50.0.1'))]
 d1 <- melt(d, id=c('annotation','count'))
 maf = 0.2
-type1 = 0.05
-nTests = 100000
+type1 = 0.00005
+nTests = 1000000
+mystddev = .4
 
-d1$power_100 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=1)
-d1$power_200 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 200, verbose=FALSE, mystddev=1)
-d1$power_250 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 250, verbose=FALSE, mystddev=1)
-d1$power_300 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 300, verbose=FALSE, mystddev=1)
-d1$power_400 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 400, verbose=FALSE, mystddev=1)
-d1$power_500 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 500, verbose=FALSE, mystddev=1)
+d1$power_100 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 100, verbose=FALSE, mystddev=mystddev)
+d1$power_200 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 200, verbose=FALSE, mystddev=mystddev)
+d1$power_250 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 250, verbose=FALSE, mystddev=mystddev)
+d1$power_300 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 300, verbose=FALSE, mystddev=mystddev)
+d1$power_400 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 400, verbose=FALSE, mystddev=mystddev)
+d1$power_500 = powerEQTL.SLR(maf, typeI = type1, nTests = nTests, slope=d1$value, myntotal = 500, verbose=FALSE, mystddev=mystddev)
 
 d2 <- renameAnnotations(d1)
 d2$variable <- as.numeric(gsub("X", "", d2$variable))
