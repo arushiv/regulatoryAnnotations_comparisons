@@ -37,10 +37,11 @@ rule final:
     7. Perform regression
     """
     input:
+        powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf"),
         effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.{cell}.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
                                      cell = ['GM12878','H1','HepG2','K562'], fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
-        # regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
-        #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
+        regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.{cell}.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
+                            cell = 'K562', fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
         # powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf"),
         # effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
     
@@ -155,53 +156,54 @@ rule plot:
         os.path.join(DIRECTORIES['figures'], "fig.{cell}.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.pdf")
     params:
         script = SCRIPTS['plot_raincloud']
+    log:
+        os.path.join(DIRECTORIES['figures'], "fig.{cell}.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.effectSizeInannotations.log")
     shell:
         r""" 
-        Rscript {params.script} {input} {output}
+        Rscript {params.script} {input} {output} 1> {log}
         """ 
         
-# rule regress:
-#     input:
-#         rules.intersectAnnotations.output.main
-#     output:
-#         os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.ATACPeaksChromStates.dat"),
-#     params:
-#         script = SCRIPTS['regression']
-#     shell:
-#         r"""
-#         python {params.script} --inputfile {input} --typereg intpeaks > {output};
-#         """
+rule regress:
+    input:
+        rules.intersectAnnotations.output.main
+    output:
+        os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.{cell}.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.ATACPeaksChromStates.dat"),
+    params:
+        script = SCRIPTS['regression']
+    shell:
+        r"""
+        python {params.script} --inputfile {input} --typereg intpeaks > {output};
+        """
                                                                     
-# rule setup_powerCalc:
-#     input:
-#         expand(rules.intersectAnnotations.output.main, fdr=0.1, prune_r2=0.8, maf=0.2, proxy_r2=0.99)
-#     output:
-#         os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
-#     run:
-#         d = pandas.read_csv(input[0], sep="\t")
-#         print(d)
-#         d.drop_duplicates(['chrom','snp','annotation'], inplace=True)
-#         d.loc[:,'absoluteEffect'] = abs(d['slope'])
-#         # nd = d.groupby('annotation')['absoluteEffect'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
-#         # nd.to_csv(output[0], sep='\t', index=False)
-#         nd = d.groupby('annotation')['absoluteEffect'].describe(percentiles=numpy.arange(0.1, 0.91, 0.01)).reset_index()
-#         for col in nd.columns:
-#             if col[0].isdigit():
-#                 newcol = round(float(col.replace("%","")),2)
-#                 nd.rename(columns={col:newcol}, inplace=True)
-#         nd.to_csv(output[0], sep='\t', index=False)
+rule setup_powerCalc:
+    input:
+        expand(rules.intersectAnnotations.output.main, cell = "K562", fdr=0.1, prune_r2=0.8, maf=0.2, proxy_r2=0.99)
+    output:
+        os.path.join(DIRECTORIES['intermediateFiles'], "summaryByAnnotation.txt")
+    run:
+        d = pandas.read_csv(input[0], sep="\t")
+        print(d)
+        d.drop_duplicates(['chrom','SNP','annotation'], inplace=True)
+        d.loc[:,'absoluteEffect'] = abs(d['slope'])
+        # nd = d.groupby('annotation')['absoluteEffect'].describe().reset_index().rename(columns={'25%':'p_25','50%':'p_50','75%':'p_75'})
+        # nd.to_csv(output[0], sep='\t', index=False)
+        nd = d.groupby('annotation')['absoluteEffect'].describe(percentiles=numpy.arange(0.1, 0.91, 0.01)).reset_index()
+        for col in nd.columns:
+            if col[0].isdigit():
+                newcol = round(float(col.replace("%","")),2)
+                nd.rename(columns={col:newcol}, inplace=True)
+        nd.to_csv(output[0], sep='\t', index=False)
 
 
-# rule plot_power:
-#     input:
-#         rules.setup_powerCalc.output
-#     output:
-#         os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
-#     params:
-#         script = SCRIPTS['powerCalc']
-#     shell:
-#         r"""
-#         Rscript {params.script} {input} {output}
-#         """
+rule plot_power:
+    input:
+        rules.setup_powerCalc.output
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf")
+    params:
+        script = SCRIPTS['powerCalc']
+    shell:
+        r"""
+        Rscript {params.script} {input} {output}
+        """
                                                                                                                                                         
-
