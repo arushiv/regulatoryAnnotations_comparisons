@@ -13,7 +13,7 @@ DIRECTORIES :
   data : "data"
   intermediateFiles : "intermediateFiles/"
   scripts : "scripts"
-  figures : "figures/chromhmm_analysis/learnmodels/"
+  figures : "figures/"
   
 
 SCRIPTS :
