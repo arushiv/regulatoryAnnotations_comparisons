@@ -4,13 +4,15 @@ include: "../Snakefile_config"
 
 SCRIPTS = {
     'plot_summaryStats' : "scripts/plot.R",
-    'plot_heatmap' : "scripts/heatmap.R"
+    'plot_heatmap' : "scripts/heatmap.R",
+    'plot_jaccard' : "scripts/plot_jaccard.R"
 }
 
 rule final:
     """ Plot summary statistics for annotations """
     input:
         os.path.join(DIRECTORIES['figures'], "fig.summaryStatistics.pdf"),
+        os.path.join(DIRECTORIES['figures'], "fig.2d_separated.pdf"),
         os.path.join(DIRECTORIES['figures'], "fig.overlapHeatmap.pdf")
 
 
@@ -91,3 +93,17 @@ rule plot_overlapFractions:
         os.path.join(DIRECTORIES['figures'], "fig.overlapHeatmap.pdf")
     script:
         SCRIPTS['plot_heatmap']
+
+rule plot_jaccard:
+    """Plot Jaccard statistic for overlap, gives a more simpler plot than heatmap """
+    input:
+        rules.getOverlapFractions.output.main
+    output:
+        os.path.join(DIRECTORIES['figures'], "fig.2d_separated.pdf")
+    params:
+        script = SCRIPTS['plot_jaccard']
+    shell:
+        """ 
+        Rscript {params.script} {input} {output}
+        """
+        
