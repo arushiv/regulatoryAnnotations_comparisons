@@ -2,8 +2,8 @@
 - Number of segments
 - Segment length distribution
 - Percent genome coverage
-and plot these summary statistics for annotations (Fig. 1 A,B,C)
-- compute overlap fractions and plot heatmap (Fig. 1D)
+and plot these summary statistics for annotations (Fig. 2 A,B,C)
+- compute overlap fractions and plot Jacacrd (Fig. 2 D,E)
 Does not require cluster submission.
 
 ## Dry run
