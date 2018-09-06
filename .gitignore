@@ -5,3 +5,6 @@ intermediateFiles/
 logs/
 .snakemake/
 .ipynb_checkpoints/
+.drmr/
+gregorRun/
+__pycache__/
