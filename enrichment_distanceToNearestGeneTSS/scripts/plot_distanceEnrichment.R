@@ -34,7 +34,7 @@ mytheme = theme(strip.text.x = element_text(size = 8),
                 legend.key.size=unit(7,"mm"),
                 panel.grid.major.x=element_line(colour="grey", linetype="dashed", size=0.1),
                 panel.grid.major.y=element_line(colour="grey", linetype="dashed", size=0.1),
-                legend.key=element_rect(fill="white", colour="black"),
+                legend.key=element_rect(fill="white"),
                 strip.background=element_rect(fill="white", colour="black")
                 )
 

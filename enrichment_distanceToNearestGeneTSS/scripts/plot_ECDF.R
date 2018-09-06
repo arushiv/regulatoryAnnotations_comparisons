@@ -32,7 +32,7 @@ makeEcdfPlot <- function(d){
               panel.grid.major.x=element_line(colour="grey", linetype="dashed", size=0.1),
               panel.grid.major.y=element_line(colour="grey", linetype="dashed", size=0.1),
               legend.position="bottom",
-              legend.key=element_rect(fill="white", colour="black"),
+              legend.key=element_rect(fill="white"),
               legend.key.size=unit(7,"mm"),
               strip.background=element_rect(fill="white", colour="black")) +
         scale_colour_brewer(palette="Set1", name="") 
