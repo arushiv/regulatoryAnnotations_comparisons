@@ -56,23 +56,27 @@ Now change into the analysis directories and run snakemake using the respective 
 
 Below are the analysis directories corresponding to each figure:
 ```	
-├── Fig 2A-D: `summaryStatistics` :: `Snakefile`
-│   └──	Supplementary Fig 1 :: `Snakefile_GAT`		
-├── Fig 3: `coverageChromatinStates` :: `Snakefile`
+├── Fig 2A-E: `summaryStatistics` :: `Snakefile`
+│   └──	Supplementary Fig S1 :: `Snakefile_GAT`		
+├── Fig 3: `histone_info_content` :: `Snakefile`
+│   └──	Supplementary Fig S3, S4 :: `Snakefile`			
 ├── Fig 4A: `enrichment_distanceToNearestGeneTSS` :: `Snakefile_binBylclESI`
-│   ├── Supplementary Fig 3 :: `Snakefile_allPCgenes`	
-│   ├── Supplementary Fig 5: Automatically runs subworkflow in `lclESI_GTExV7`
-│   └──	Supplementary Fig 6 :: `Snakefile_binBylclESI`
+│   ├── Supplementary Fig S6 :: `Snakefile_allPCgenes`	
+│   ├── Supplementary Fig S8: Automatically runs subworkflow in `lclESI_GTExV7`
+│   └──	Supplementary Fig S9 :: `Snakefile_binBylclESI`
 ├── Fig 4B: `enrichment_eQTL` :: `Snakefile_binByESI`
-│   ├── Supplementary Fig 4 :: `Snakefile_bulkEnrichment`	
+│   ├── Supplementary Fig S7 :: `Snakefile_bulkEnrichment`	
 │   ├── Automatically runs subworkflow in `lclESI_GTExV7`
-│   └──	Supplementary Fig 7 :: `Snakefile_binByESI`	
-├── Fig 5A: `effectSizeDistribution_eqtl`
-│   └── Fig 5A, B, Supplementary Fig 8, 9, table 1 :: `Snakefile_eQTLEffect`
-├── Fig 5B: `effectSizeDistribution_dsqtl`
-│   └── Fig 5C :: `Snakefile_dsQTLEffect`
+│   └──	Supplementary Fig S10 :: `Snakefile_binByESI`	
+├── Fig 5A, B: `effectSizeDistribution_bloodEqtl`
+│   └── Fig 5A, B, Supplementary Fig S11, table 1 :: `Snakefile`
 ├── Fig 5C: `effectSizeDistribution_dsqtl`
-    └── Fig 5D :: `Snakefile_allelicBiasEffect`
-
+│   └── Fig 5C :: `Snakefile_dsQTLEffect`
+├── Fig 5D: `effectSizeDistribution_dsqtl`
+│   └── Fig 5D, Supplementary Fig S13 :: `Snakefile_allelicBiasEffect`
+├── Supplementary Fig S2: `coverageChromatinStates` :: `Snakefile`
+├── Supplementary Fig S5, Table S2: `enrichment_gwas_extended` :: `Snakefile`
+├── Supplementary Fig S12: `effectSizeDistribution_eqtl` :: `Snakefile`
+	
 ```
 	
