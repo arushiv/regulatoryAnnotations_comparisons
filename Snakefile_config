@@ -103,18 +103,17 @@ rule download_workspace:
     shell:
         """wget --no-check-certificate {params.link} -O {output} """
 
-# rule download_gencodeAnnotation:
-#     output:
-#         tempAnnot = temp(os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz")),
-#         pc_gene_list = DATA['pc_gene_list'],
-#         annot = DATA['gencode_annotation']
-#     params:
-#         link = LINKS['gencode_annotation'],
-#     run:
-#         shell(r"""
-#         wget {params.link} -O {output.tempAnnot} ;
-#         zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.pc_gene_list}
-#         """)
+rule download_gencodeAnnotation:
+    output:
+        tempAnnot = temp(os.path.join(BASE_PATH, "data/reference/gencode.v19.annotation.gtf.gz")),
+        annot = DATA['gencode_annotation']
+    params:
+        link = LINKS['gencode_annotation'],
+    run:
+        shell(r"""
+        wget {params.link} -O {output.tempAnnot} ;
+        zcat {output.tempAnnot} | grep -v -P ^## | awk '{{print $1"\t"$4"\t"$5"\t"$18"\t"$6"\t"$7"\t"$10"\t"$14}}' | sed 's/"//g' | sed 's/;//' | perl -e 'while (<>) {{ chomp; ($c, $ts, $te, $n, $score, $s, $ensg, $biotype) = split /\s+/; ($id,@junk) = split (/[;.]/,$ensg); ($type,@junk) = split (/[;.]/,$biotype); if ($s eq "+") {{ $end = $ts+1; print "$c\t$ts\t$end\t$id\t$n\t$type\n";}}  else {{ $start = $te-1; $end = $start + 1; print "$id\t$n\t$type\n";   }}    }}' | sort | uniq | bgzip -c > {output.annot}
+        """)
         
 rule download_1000g:
     output:
