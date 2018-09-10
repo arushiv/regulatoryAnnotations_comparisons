@@ -41,7 +41,7 @@ rule getExpectedFracRef:
     The file includes all SNPs with minimum coverage = 3.
     """
     input:
-        expectation = expected_fracRef,
+        expectation = DATA['gm_expected_deviation'],
         datfile = rules.create_downsampled.output.main
     output:
         bedfile = temp(os.path.join(DIRECTORIES['intermediateFiles'], "positions.downsampled{depth}.bed")),
