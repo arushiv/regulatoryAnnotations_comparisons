@@ -22,6 +22,9 @@ LINKS = {
     'plot_information' : "git@github.com:arushiv/SeabornCustomGrid.git",
     'nhgri_gwas' : "https://www.ebi.ac.uk/gwas/api/search/downloads/alternative",
     'pc_gene_list' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/tsslist_gencodev19_pc.bed",
+    'hg19_lengths' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/hg19_lengths.txt",
+    'state13_model' : "https://theparkerlab.med.umich.edu/data/papers/doi/10.1073/pnas.1621192114/chromatin_states/model_13.txt",
+    'binarized' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/chromatinStates/bed_binarized/{cell}_chr{chrom}_binary.txt.gz",
 }
 
 DATA = {
@@ -44,6 +47,9 @@ DATA = {
     'vcf_sampleInfo' : os.path.join(BASE_PATH,  "data/1000g/igsr.tsv.gz"),
     'plot_information' : expand(os.path.join(BASE_PATH, "histone_info_content/scripts/SeabornCustomGrid", "{script}.py"), script=["plot_utils", "faceted_jointplots"]),
     'nhgri_gwas' : os.path.join(BASE_PATH,  "data/gwas", "gwas_catalog_v1.0.2-associations_e92_r2018-05-29.tsv"),
+    'hg19_lengths' : os.path.join(BASE_PATH, "data/reference/hg19_lengths.txt"),
+    'state13_model' : os.path.join(BASE_PATH,  "data/chromatinStates/model_13.txt"),
+    'binarized' : os.path.join(BASE_PATH,  "data/chromatinStates/bedBinarized/", "{cell}_chr{chrom}_binary.txt.gz"),   
 }
 
 DIRECTORIES = {
@@ -58,7 +64,7 @@ REGIONS = ['broadDomains','hotRegions','stretchEnhancer','superEnhancers','typic
 CELLS = ['GM12878','H1','HepG2','K562']
 CHROMATINSTATES = ['10_Active_enhancer_2', '11_Weak_enhancer', '14_Bivalent_poised_TSS', '16_Repressed_polycomb', '17_Weak_repressed_polycomb', '18_Quiescent_low_signal', '1_Active_TSS', '2_Weak_TSS', '3_Flanking_TSS', '5_Strong_transcription', '6_Weak_transcription', '8_Genic_enhancer', '9_Active_enhancer_1']
 CHROM = range(1, 23)
-
+BINARIZEDIR = os.path.join(BASE_PATH,  "data/chromatinStates/bedBinarized/")
    
 rule download_annotations:
     """Download and gunzip because GREGOR requires unzipped files later"""
@@ -213,4 +219,37 @@ rule download_tss_pc_gene_list:
     shell:
         """
         wget --no-check-certificate {params.pc_gene_list} -O {output.pc_gene_list}
+        """
+
+rule download_hg19_lengths:
+    """Get hg19 lengths file """
+    params:
+        hg19_lengths = LINKS['hg19_lengths']
+    output:
+        hg19_lengths = DATA['hg19_lengths']
+    shell:
+        """
+        wget --no-check-certificate {params.hg19_lengths} -O {output.hg19_lengths} 
+        """
+
+rule download_state13model:
+    """Get 13 chromatin state model file """
+    params:
+        state13_model = LINKS['state13_model']
+    output:
+        state13_model = DATA['state13_model']
+    shell:
+        """
+        wget --no-check-certificate {params.state13_model} -O {output.state13_model} 
+        """
+
+rule download_bedBinarized:
+    """Get binarized histone ChIP-seq data """
+    params:
+        binarized = LINKS['binarized']
+    output:
+        binarized = DATA['binarized']
+    shell:
+        """
+        wget --no-check-certificate {params.binarized} -O {output.binarized} 
         """
