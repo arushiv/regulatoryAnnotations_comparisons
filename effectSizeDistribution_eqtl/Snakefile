@@ -36,9 +36,9 @@ rule final:
     """
     input:
         powerCalc = os.path.join(DIRECTORIES['figures'], "fig.powerCalc.pdf"),
+        effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
+                                     fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
         # effectVsMaf =expand(os.path.join(DIRECTORIES['figures'], "gtexV7.significantfdr{fdr}.effectVsMAF.pdf"), fdr = config['fdr']),
-        # effectDistribution =  expand(os.path.join(DIRECTORIES['figures'], "fig.gtexV7.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.effectSizeInannotations.pdf"),
-        #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
         # regression = expand(os.path.join(DIRECTORIES['regression'], "regress_SEvsTE.allInfo.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{gregor_r2}.ATACPeaksChromStates.dat"),
         #        fdr = config['fdr'], prune_r2 = config['prune_r2'], maf = config['maf'], gregor_r2 = config['proxy_r2']),
 
@@ -46,7 +46,7 @@ rule final:
 rule formatEqtlFile:
     """Select by FDR threshold, retain 1 assocaiation per SNP """
     input:
-        eqtlfile = DATA['gtex_eqtl']
+        eqtlfile = DATA['gtex_lcleqtl']
     output:
         full = os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.significantfdr{fdr}.dat"),
     run:
@@ -102,7 +102,7 @@ def getHeaderList(filename, extendlist):
 rule getHeaderString:
     """Get header of file after pruning and proxy fetching from included Snakefile """
     input:
-        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.dat"),
+        proxyfile = os.path.join(DIRECTORIES['intermediateFiles'], "pruned.proxies.significantfdr{fdr}.maf{maf}.ld{proxy_r2}.dat"),
     output:
         os.path.join(DIRECTORIES['intermediateFiles'], "headerstring.gtex.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.dat")
     run:
