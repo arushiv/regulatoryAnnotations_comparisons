@@ -1,0 +1,41 @@
+# general
+fdr : 0.1
+maf : 0.2
+# prune
+population_type: "Superpopulation code"  # Choose which column in vcf_sampleInfo file to subset samples on. Another option could be "Population code" to subest by population
+population_code: "EUR"
+output_directory: "intermediateFiles/prune_and_proxies"  # Where output will be saved
+prune_r2 : 0.8
+1000g_maf : 0.05 # Min MAF in popluation considered to avoid ultra low freq alleles that result in duplicate rsIDs due to which plink fails
+proxy_r2 : 0.99
+
+DIRECTORIES :
+  gregor_dir : "intermediateFiles/qtl_enrichments/"
+  output_dir : "output_{trait}.ld{gregor_r2}"
+  figures : "intermediateFiles/qtl_enrichments"
+
+DATA :
+  input_snps : "intermediateFiles/pruned_input_for_proxy.{trait}.txt"
+  annotation : "/lab/work/arushiv/regulatoryAnnotations_comparisons/data/annotations/{annotation}.annotations.bed"
+  ANNOTATIONS : "expand(config['DATA']['annotation'], annotation=[x for x in glob_wildcards(config['DATA']['annotation'])[0]])"
+  output : "enrichment_stats.txt"
+  output_fig : "fig.qtl_enrichment_in_annotations.pdf"
+  output_proxy : "{trait}.proxy{gregor_r2}.dat"
+    
+PARAMETERS : 
+  gregor_version_path : "/lab/sw/modules/GREGOR/1.2.1/script/GREGOR.pl"
+  config_name : "enrich.{trait}.ld{gregor_r2}.conf"
+  POPULATION : "EUR"
+  TRAITS : "str('significantfdr0.1.maf0.2')"
+  gregor_r2 : [0.99]
+  cores: 10
+  nameFieldSeparator: '.'
+  jobFieldSeparator : '.'
+  header : "qtl fdr maf mafval ld ldr2 cell annotation feature overlap expected_overlap pval"
+  PROXY: "expand(GREGOR_proxies, trait=TRAITS, gregor_r2 = 0.99)"
+    
+SCRIPTS : 
+  makeConfFile : "/home/arushiv/toolScripts/gregor_makeConf.py"
+  assembleDF : "/home/arushiv/toolScripts/makeDataFrame_gregor_new.py"
+  plot : "scripts/plotEnrichment.R"
+  getProxies : "~arushiv/toolScripts/gregorOutputCompileLdSnps.py"
