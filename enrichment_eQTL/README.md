@@ -3,7 +3,7 @@
 
 ## Dry run
 ```
-$	snakemake -nps Snakefile_binByESI
+$	snakemake -nps Snakefile_binByESI --configfile config_prunePlink.yaml
 ```
 ## Run for supplementary figure S3: cluster execution recommended. Example for SLURM:
 ```
