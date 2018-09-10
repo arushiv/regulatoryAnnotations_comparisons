@@ -11,7 +11,7 @@ DIRECTORIES.update({
     'gregorRun' : "gregorRun"
 }) 
 
-DATA.update({'gtex_eqtl':"/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Whole_Blood.v7.egenes.txt.gz"})
+# DATA.update({'gtex_eqtl':"/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Whole_Blood.v7.egenes.txt.gz"})
 
 SCRIPTS = {
     'effectVsMaf' : "scripts/plot_effectVsMaf.R",
@@ -48,7 +48,7 @@ rule final:
 rule formatEqtlFile:
     """Select by FDR threshold, retain 1 assocaiation per SNP """
     input:
-        eqtlfile = DATA['gtex_eqtl']
+        eqtlfile = DATA['gtex_bloodeqtl']
     output:
         full = os.path.join(DIRECTORIES['intermediateFiles'], "gtexV7.significantfdr{fdr}.dat"),
     run:
