@@ -3,10 +3,12 @@ import os
 include: "../Snakefile_config"
 
 SCRIPTS = {
-    'plot' : "scripts/plot_compare.R"
+    'plot' : "scripts/plot_compare.R",
+    'merge' : "scripts/merge2FilesByColnames.py"
 }
 
-vcf = "/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"
+vcf = DATA['1000g']
+#"/lab/data/genomes/human/hg19/1000GenomesDownloads/ALL.chr{chrom}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz"
 # expected_fracRef = "data/GM12878.post_mpileup.err"
 
 rule final:
@@ -59,11 +61,12 @@ rule getMAF:
         main = temp(os.path.join(DIRECTORIES['intermediateFiles'], "downsampled{depth}.chr{chrom}.withMAF.dat"))
     params:
         outstring = os.path.join(DIRECTORIES['intermediateFiles'], "downsampled{depth}.chr{chrom}.dat"),
+        mergeScript = SCRIPTS['merge']
     shell:
         r"""
         vcftools --gzvcf {input.vcf} --bed {input.bedfile} --get-INFO EUR_AF  --out {params.outstring} ; 
         awk '{{print "chr"$0}}' OFS='\t' {output.withmaf} | grep -v chrCHROM > {output.withmaf}.temp; mv {output.withmaf}.temp {output.withmaf} ; 
-        python ~arushiv/toolScripts/merge2FilesByColnames.py {input.datfile} {output.withmaf} {output.main} -h2 chrom end ref_x alt altFreq -on chrom end -t inner 
+        python {params.mergeScript} {input.datfile} {output.withmaf} {output.main} -h2 chrom end ref_x alt altFreq -on chrom end -t inner 
         """
 
 rule compileMAF:
