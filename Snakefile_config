@@ -11,6 +11,7 @@ LINKS = {
     'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
     'gtex_expression' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz",
     'gtex_eqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
+    'gtex_bloodeqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Whole_Blood.v7.egenes.txt.gz",
     'dsqtl' : "http://eqtl.uchicago.edu/dsQTL_data/QTLs/GSE31388_dsQtlTable.txt.gz",
     'gm_allelic_bias' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/effectSize/GM12878.biasInfo.dat",
     'gm_expected_deviation' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/effectSize/GM12878.expectedRef.dat",
@@ -34,7 +35,8 @@ DATA = {
     'gencode_annotation' : os.path.join(BASE_PATH, "data/reference/gencode.v19.tssUniq.annotation.bed.gz"),
     'pc_gene_list' : os.path.join(BASE_PATH, "data/reference/tsslist_gencodev19_pc.bed"),
     'gtex_expression' : os.path.join(BASE_PATH, "data/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz"),
-    'gtex_eqtl' : "/lab/data/eqtl/gtex_v7/GTEx_Analysis_v7_eQTL/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
+    'gtex_lcleqtl' : os.path.join(BASE_PATH, "data/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz"),  
+    'gtex_bloodeqtl' : os.path.join(BASE_PATH, "data/gtex_v7/Whole_Blood.v7.egenes.txt.gz"),
     'dsqtl' : os.path.join(BASE_PATH, "data/qtlEffects/dsQtlTable.txt.gz"),
     'gm_allelic_bias' : os.path.join(BASE_PATH, "data/qtlEffects/gm.allelic.bias.dat.gz"),
     'gm_expected_deviation' : os.path.join(BASE_PATH, "data/qtlEffects/gm.expectedFracRef.dat.gz"),
@@ -138,14 +140,26 @@ rule download_100g_sampleInfo:
         wget {params.vcf_sampleInfo} -O {output.vcf_sampleInfo}
         """
         
-rule download_gtexEqtl:
+rule download_gtexEqtl_lcl:
     output:
-        DATA['gtex_eqtl']
+        lcl = DATA['gtex_lcleqtl'],
     params:
-        link = LINKS['gtex_eqtl']
+        lcl = LINKS['gtex_lcleqtl'],
     shell:
-        """wget --no-check-certificate {params.link} -O {output} """
-        
+        """
+        wget --no-check-certificate {params.lcl} -O {output.lcl} ;
+        """
+
+rule download_gtexEqtl_blood:
+    output:
+        blood = DATA['gtex_bloodeqtl'],
+    params:
+        blood = LINKS['gtex_bloodeqtl'],
+    shell:
+        """
+        wget --no-check-certificate {params.blood} -O {blood}
+        """
+
 rule download_gtexExpression:
     output:
         DATA['gtex_expression']
