@@ -139,7 +139,7 @@ rule intersectAnnotations:
     """
     input:
         eqtlfile = rules.mergeProxiesWithQTL.output.main,
-        annotations = expand("../data/annotations/{{cell}}.{region}.annotations.bed", region = REGIONS),
+        annotations = expand(os.path.join(BASE_PATH, "data/annotations/{{cell}}.{region}.annotations.bed"), region = REGIONS),
         headerString = rules.getHeaderString.output
     output:
         main = os.path.join(DIRECTORIES['intermediateFiles'], "{cell}.fdr{fdr}.prune{prune_r2}.maf{maf}.ld{proxy_r2}.annotations.dat"),
