@@ -10,7 +10,7 @@ LINKS = {
     'workspace' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/reference/hg19_chromsizes.bed",
     'gencode_annotation' : "ftp://ftp.sanger.ac.uk/pub/gencode/Gencode_human/release_19/gencode.v19.annotation.gtf.gz",
     'gtex_expression' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_median_tpm.gct.gz",
-    'gtex_eqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
+    'gtex_lcleqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Cells_EBV-transformed_lymphocytes.v7.egenes.txt.gz",
     'gtex_bloodeqtl' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/gtex_v7/Whole_Blood.v7.egenes.txt.gz",
     'dsqtl' : "http://eqtl.uchicago.edu/dsQTL_data/QTLs/GSE31388_dsQtlTable.txt.gz",
     'gm_allelic_bias' : "https://theparkerlab.med.umich.edu/data/regulatory_comparisons/effectSize/GM12878.biasInfo.dat",
@@ -157,7 +157,7 @@ rule download_gtexEqtl_blood:
         blood = LINKS['gtex_bloodeqtl'],
     shell:
         """
-        wget --no-check-certificate {params.blood} -O {blood}
+        wget --no-check-certificate {params.blood} -O {output.blood}
         """
 
 rule download_gtexExpression:
