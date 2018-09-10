@@ -1,11 +1,15 @@
 library(ggplot2)
-library(stringr)
-library(ggrepel)
-library(scales)
-require(plyr)
-library(dplyr)
 library(ggpubr)
+library(gridExtra)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(Hmisc)
+library(plyr)
+library(RColorBrewer)
+library(reshape2)
 
+source("https://gist.githubusercontent.com/benmarwick/2a1bb0133ff568cbe28d/raw/fb53bd97121f7f9ce947837ef1a4c65a73bffb3f/geom_flat_violin.R")
 args <- commandArgs(TRUE)
 d <- read.table(args[1], header=T)
 
@@ -59,6 +63,17 @@ makePlot <- function(d, filter){
     return(p)
 }
 
+makePlot_coverage <- function(d, filter){
+    d <- data.frame(d %>% group_by(annotation) %>% mutate(count = n()))
+    d$annotation <- paste(d$annotation, "\n(N = ", d$count, ")", sep="") 
+    p <- ggplot(d, aes(x = annotation, y = total_coverage)) +
+        geom_boxplot(aes(fill=annotation), width=0.5) +
+        labs(y="Coverage at biased SNPs", x="", title=paste("coverage filter", filter, sep=" ")) +
+        scale_fill_brewer(name="", palette="Set1", guide=FALSE) +
+        theme(axis.text.x=element_text(size=7, angle=30, hjust=1), strip.text.x = element_text(size = 8), panel.background = element_rect(fill = 'white', colour='black'), panel.grid=element_blank())
+    return(p)
+}
+
 nominalPval_coverageFilters <- function(){
     for ( filter in c(10, 15,20)){
         d <- subsetColumn(d, "significant", c("yes"))   # Nominal pval
@@ -69,13 +84,53 @@ nominalPval_coverageFilters <- function(){
     }
 }
 
+makeRaincloud <- function(d, filter){
+    raincloud_theme = theme(
+        text = element_text(size = 7),
+        axis.title.x = element_text(size = 8),
+        axis.title.y = element_text(size = 8),
+        axis.text = element_text(size = 7),
+        axis.text.x = element_text(angle = 30, hjust = 1),
+        legend.title=element_text(size=16),
+        legend.text=element_text(size=16),
+        legend.position = "bottom",
+        plot.title = element_text(lineheight=.8, face="bold", size = 16),
+        panel.border = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.grid.major = element_blank(),
+        axis.line.x = element_line(colour = 'black', size=0.5, linetype='solid'),
+        axis.line.y = element_line(colour = 'black', size=0.5, linetype='solid'))
+
+    d <- data.frame(d %>% group_by(annotation) %>% mutate(count = n()))
+    print(d)
+    d$annotation <- paste(d$annotation, "\n(N = ", d$count, ")", sep="")
+    g <- ggplot(data = d, aes(y = deviation, x = annotation, fill = annotation)) +
+        geom_flat_violin(position = position_nudge(x = .2, y = 0), alpha = .8) +
+        geom_point(aes(y = deviation, color = annotation), position = position_jitter(width = .15), size = .5, alpha = 0.8) +
+        geom_boxplot(width = .1, guides = FALSE, outlier.shape = NA, alpha = 0.5) +
+        expand_limits(x = 5.25) +
+        guides(fill = FALSE) +
+        guides(color = FALSE) +
+        scale_color_brewer(palette = "Set1") +
+        scale_fill_brewer(palette = "Set1") +
+                                        # coord_flip() +
+        labs(y="Effect size (Allelic Bias)", x="", title=paste("coverage filter", filter, sep=" ")) +
+        theme_bw() +
+        raincloud_theme
+    return(g)
+
+}
+
 fdrBY_coverageFileters <- function(){
     for ( filter in c('qval_10')){
         d1 <- d[ d[[filter]] <= 0.05 ,]
         d1 <- d1[complete.cases(d1[,filter]),]
         print(filter)
         print(wilcoxTest(d1))
+        print(makeRaincloud(renameAnnotations(d1), filter))
         print(makePlot(renameAnnotations(d1), filter))
+        print(makePlot_coverage(renameAnnotations(d1), filter))
+        print(summary(d1[d1$annotation=="stretchEnhancer",]$total_coverage))
     }
 }
 
