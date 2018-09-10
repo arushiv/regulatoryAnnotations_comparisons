@@ -3,19 +3,19 @@
 
 ## Dry run
 ```
-$	snakemake -np
+$	snakemake --configfile config_files/config_chromhmm.yaml -np
 ```
 ## Run
 ```
-$	snakemake -p --latency-wait 400
+$	snakemake --configfile config_files/config_chromhmm.yaml -p --latency-wait 400
 ```
 	
 ## Print workflow rulegraph
 ```
-	snakemake --rulegraph | dot -Tsvg > workflow.svg
+$	snakemake --configfile config_files/config_chromhmm.yaml --rulegraph | dot -Tsvg > workflow.svg
 ```
 
-## Run
+## Run using SLURM
 ```
 $ mkdir -p logs && snakemake --cluster-config cluster.yaml  --cluster "sbatch --time {cluster.time} --mem {cluster.mem} --cpus-per-task {cluster.cpus} --job-name {cluster.jobname} -o {cluster.output} -e {cluster.error} --parsable" -j 60 --latency-wait 400  --configfile  config_files/config_chromhmm.yaml -p
 ```
