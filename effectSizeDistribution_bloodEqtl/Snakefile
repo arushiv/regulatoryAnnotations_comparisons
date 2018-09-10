@@ -4,6 +4,7 @@ import numpy
 
 include: "../Snakefile_config"
 include: "Snakefile_prunePlink"
+include: "Snakefile_GREGOR"
 
 DIRECTORIES.update({
     'regression' : "regression",
@@ -30,7 +31,7 @@ rule final:
     GTEx gene based FDR 10% eQTL set - 
     1. Prune by LD
     2. Filter by MAF
-    3. Get r2>0.99 buddies
+    3. Get r2>0.99 buddies - Use GREGOR output as plink is quite slow for large number of blood eQTL
     4. Intersect with annotations and plot
     5. Also plot effect size vs MAF 
     6. Perform power calculations
