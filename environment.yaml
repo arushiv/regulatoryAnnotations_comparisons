@@ -25,3 +25,4 @@ dependencies:
   - vcftools=0.1.15
   - plink
   - pybedtools=0.7.10
+  - chromhmm
