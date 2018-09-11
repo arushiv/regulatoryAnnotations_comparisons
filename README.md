@@ -1,7 +1,7 @@
 # Regulatory Annotations Comparisons
 This repository contains code to reproduce results of the manuscript:
 Cell specificty of regulatory annotations and their genetics effects on gene expression
-Processed datasets and a static version of the code have been submitted to [Zenodo](10.5281/zenodo.1413623)
+Processed datasets and a static version of the code have been submitted to Zenodo, DOI: 10.5281/zenodo.1413623
 
 Each directory contains code for analyses specific to different figures of the paper. Everything is run using [snakemake](http://snakemake.readthedocs.io/en/latest/). The analysis directories follow this general pattern:
 ```	
